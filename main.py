@@ -1,3 +1,14 @@
+'''
+Function:
+    大学生在线 "四史"自动答题刷分
+Author:
+    XWhite
+GitHub项目地址:
+    https://github.com/Upsetin/iCS
+更新日期:
+    2021-01-10
+'''
+
 import requests,csv,re,json,random,time
 
 
