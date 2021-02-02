@@ -11,5 +11,10 @@
 在终端执行以下语句安装依赖即可:  
 `pip install requests`  
 
-#### 使用方法  
-将题库.csv与main.py放于同一目录下,直接运行main.py文件即可.
+#### 使用方法
++ 有Python环境  
+  将题库.csv与main.py放于同一目录下,直接运行main.py文件即可.
+  
++ 无Python环境
+  下载可执行文件，将题库.csv与main.exe置于同一文件夹，直接运行即可.
+ 
