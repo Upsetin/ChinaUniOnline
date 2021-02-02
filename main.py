@@ -9,6 +9,7 @@ GitHub项目地址:
     2021-01-10
 '''
 
+
 import requests,csv,re,json,random,time
 
 
@@ -42,7 +43,7 @@ def ReadFile():
 
 
 def IntoFile(FileNmae = '题库.csv',Data=[]):
-    file = open(FileNmae, 'a', encoding='utf-8')
+    file = open(FileNmae, 'a', encoding='utf-8',newline=None)
     f = csv.writer(file)
     f.writerow(
         Data
@@ -143,15 +144,16 @@ def GetOption(activity_id='5f71e934bcdbf3a8c3ba5061',question_id='5f17ef305d6fe0
     db = ReadFile()
     for i in db:
         #在题库中
-        if title in i[0]:
-            print('在题库中已搜索到答案: %s - %s'%(i[0],i[1]))
-            answer = []
-            for j,k in result.items():
-                if j in i[1]:
-                    answer.append(k)
-            #提交答案
-            Confire(question_id=question_id,answer=answer)
-            return 'Sucess'
+        if i:
+            if title in i[0]:
+                print('在题库中已搜索到答案: %s - %s'%(i[0],i[1]))
+                answer = []
+                for j,k in result.items():
+                    if j in i[1]:
+                        answer.append(k)
+                #提交答案
+                Confire(question_id=question_id,answer=answer)
+                return 'Sucess'
     #题库中没有
     print('未在题库中搜索到答案，执行捕获题目模式...')
     results = SreachResult(question_id=question_id, answer=response.json()['data']['options'][0]['id'])
@@ -329,7 +331,6 @@ def GetToken(uid='6018e5d37fc77f3d90194078'):
     a = requests.get(url=url)
     global token
     token = a.json()['token']
-    print(token)
 
 
 token = ''
@@ -342,3 +343,4 @@ while num < EndNum:
     print('\n英雄篇-正在第%s次刷题～'%(num))
     GetQuestions()
 
+# input("回车退出程序:)")
