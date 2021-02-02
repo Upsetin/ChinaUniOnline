@@ -4,7 +4,7 @@ Function:
 Author:
     XWhite
 GitHub项目地址:
-    https://github.com/Upsetin/iCS
+    https://github.com/Upsetin/ChinaUniOnline
 更新日期:
     2021-01-10
 '''
