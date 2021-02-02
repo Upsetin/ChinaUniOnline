@@ -33,7 +33,7 @@ def ViewQR(url=''):
 
 
 def ReadFile():
-    with open("题库.csv", "r") as f:
+    with open("题库.csv", "r",encoding='utf-8') as f:
         reader = csv.reader(f)
         db = []
         for row in list(reader):
@@ -335,7 +335,6 @@ def GetToken(uid='6018e5d37fc77f3d90194078'):
 token = ''
 Login()
 
-# PK10()
 EndNum = int(input("暂只适配英雄篇,请输入的刷题次数 (55次稳上1000分): "))
 num = 0
 while num < EndNum:
