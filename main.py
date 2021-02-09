@@ -9,7 +9,6 @@ GitHub项目地址:
     2021-01-10
 '''
 
-
 import requests,csv,re,json,random,time
 
 
@@ -34,7 +33,7 @@ def ViewQR(url=''):
 
 
 def ReadFile():
-    with open("题库.csv", "r",encoding='utf-8') as f:
+    with open("题库.csv", "r") as f:
         reader = csv.reader(f)
         db = []
         for row in list(reader):
@@ -43,7 +42,7 @@ def ReadFile():
 
 
 def IntoFile(FileNmae = '题库.csv',Data=[]):
-    file = open(FileNmae, 'a', encoding='utf-8',newline=None)
+    file = open(FileNmae, 'a', encoding='utf-8')
     f = csv.writer(file)
     f.writerow(
         Data
@@ -74,14 +73,20 @@ def GetQuestions(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a
 
     response = requests.request("GET", url, headers=headers, data=payload)
 
-    # print(response.json())
+    # print('获取题目:',response.json())
     question_ids = response.json()['question_ids']
     num = 0
     SucessNum = 0
     FailNum = 0
-    for i in question_ids:
+    for i in range(len(question_ids)):
         num += 1
-        if GetOption(activity_id=activity_id,question_id=i,mode_id=mode_id):
+        if i == 10:
+            if CheckVerification():
+                print("验证码已通过")
+            else:
+                SubmitVerification()
+                print("验证码状态：", CheckVerification())
+        if GetOption(activity_id=activity_id,question_id=question_ids[i],mode_id=mode_id):
             SucessNum += 1
         else:
             FailNum += 1
@@ -112,7 +117,7 @@ def GetOption(activity_id='5f71e934bcdbf3a8c3ba5061',question_id='5f17ef305d6fe0
 
     response = requests.request("GET", url, headers=headers, data=payload)
 
-    # print(response.json())
+    # print('获取选项:',response.json())
 
     options = response.json()['data']['options']
     #选项
@@ -144,16 +149,15 @@ def GetOption(activity_id='5f71e934bcdbf3a8c3ba5061',question_id='5f17ef305d6fe0
     db = ReadFile()
     for i in db:
         #在题库中
-        if i:
-            if title in i[0]:
-                print('在题库中已搜索到答案: %s - %s'%(i[0],i[1]))
-                answer = []
-                for j,k in result.items():
-                    if j in i[1]:
-                        answer.append(k)
-                #提交答案
-                Confire(question_id=question_id,answer=answer)
-                return 'Sucess'
+        if title in i[0]:
+            print('在题库中已搜索到答案: %s - %s'%(i[0],i[1]))
+            answer = []
+            for j,k in result.items():
+                if j in i[1]:
+                    answer.append(k)
+            #提交答案
+            Confire(question_id=question_id,answer=answer)
+            return 'Sucess'
     #题库中没有
     print('未在题库中搜索到答案，执行捕获题目模式...')
     results = SreachResult(question_id=question_id, answer=response.json()['data']['options'][0]['id'])
@@ -198,7 +202,7 @@ def SreachResult(question_id='5f17ef305d6fe02504ba5e17',answer='5f75fe348e6c9f85
     response = requests.request("POST", url, headers=headers, data=payload)
 
     data = response.json()
-    # print(data)
+    # print('提交选项:',data)
     return response.json()['data']['correct_ids']
 
 
@@ -229,6 +233,7 @@ def Confire(question_id='5f17ef305d6fe02504ba5e17',answer=['5f75fe348e6c9f85d1b6
     response = requests.request("POST", url, headers=headers, data=payload)
 
     data = response.json()
+    # print('提交选项:', data)
     # print(data)
     return response.json()['data']['correct_ids']
 
@@ -256,7 +261,11 @@ def Finsh(race_code='6018f697224c6a1526204144'):
     }
 
     response = requests.request("POST", url, headers=headers, data=payload)
+    # print('提交:',response.json())
 
+    if response.json()['code'] == 4823:
+        SubmitVerification()
+        Finsh(race_code)
     # print(response.json())
     try:
         print('已提交,正确数:%s 用时:%ss'%(response.json()['data']['owner']['correct_amount'],response.json()['data']['owner']['consume_time']))
@@ -287,7 +296,7 @@ def PK10(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a8c3ba51d
 
     response = requests.request("GET", url, headers=headers, data=payload)
 
-    print(response.json())
+    # print(response.json())
 
     question_ids = response.json()['question_ids']
     num = 0
@@ -331,11 +340,76 @@ def GetToken(uid='6018e5d37fc77f3d90194078'):
     a = requests.get(url=url)
     global token
     token = a.json()['token']
+    print(token)
 
+
+def CheckVerification():
+    headers = {
+        'authority': 'ssxx.univs.cn',
+        'sec-ch-ua': '"Chromium";v="88", "Google Chrome";v="88", ";Not A Brand";v="99"',
+        'accept': 'application/json, text/plain, */*',
+        'authorization': 'Bearer %s' % (token),
+        'sec-ch-ua-mobile': '?0',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'sec-fetch-site': 'same-origin',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-dest': 'empty',
+        'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
+        'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
+        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a; _gat=1'
+    }
+    code = "E5ZKeoD8xezW4TVEn20JVHPFVJkBIfPg+zvMGW+kx1s29cUNFfNka1+1Fr7lUWsyUQhjiZXHDcUhbOYJLK4rS5MflFUvwSwd1B+1kul06t1z9x0mfxQZYggbnrJe3PKEk4etwG/rm3s3FFJd/EbFSdanfslt41aULzJzSIJ/HWI="
+    submit_data = {
+        "activity_id": "5f71e934bcdbf3a8c3ba5061",
+        "mode_id": '5f71e934bcdbf3a8c3ba51d5',
+        "way": "1",
+        "code": code
+    }
+    url = "https://ssxx.univs.cn/cgi-bin/check/verification/code/"
+    response = requests.post(url, json=submit_data, headers=headers)
+    result = json.loads(response.text)
+    print(result)
+    return result["status"]
+
+
+def SubmitVerification():
+    headers = {
+        'authority': 'ssxx.univs.cn',
+        'sec-ch-ua': '"Chromium";v="88", "Google Chrome";v="88", ";Not A Brand";v="99"',
+        'accept': 'application/json, text/plain, */*',
+        'authorization': 'Bearer %s' % (token),
+        'sec-ch-ua-mobile': '?0',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'sec-fetch-site': 'same-origin',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-dest': 'empty',
+        'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
+        'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
+        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a; _gat=1'
+    }
+    code = "HD1bhUGI4d/FhRfIX4m972tZ0g3jRHIwH23ajyre9m1Jxyw4CQ1bMKeIG5T/voFOsKLmnazWkPe6yBbr+juVcMkPwqyafu4JCDePPsVEbVSjLt8OsiMgjloG1fPKANShQCHAX6BwpK33pEe8jSx55l3Ruz/HfcSjDLEHCATdKs4="
+    submit_data = {
+        "activity_id": "5f71e934bcdbf3a8c3ba5061",
+        "mode_id": '5f71e934bcdbf3a8c3ba51d5',
+        "way": "1",
+        "code": code
+    }
+    url = "https://ssxx.univs.cn/cgi-bin/save/verification/code/"
+    response = requests.post(url, json=submit_data, headers=headers)
+    result = response.json()
+    # print(result)
+    # if result["code"] != 0:
+    #     pass
+        # raise MyError(result["code"], "提交验证码失败：" + str(result))
+    # return result["status"]
 
 token = ''
 Login()
 
+# CheckVerification()
+# SubmitVerification()
+
+# PK10()
 EndNum = int(input("暂只适配英雄篇,请输入的刷题次数 (55次稳上1000分): "))
 num = 0
 while num < EndNum:
@@ -343,4 +417,3 @@ while num < EndNum:
     print('\n英雄篇-正在第%s次刷题～'%(num))
     GetQuestions()
 
-# input("回车退出程序:)")
