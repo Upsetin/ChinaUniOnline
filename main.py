@@ -6,10 +6,35 @@ Author:
 GitHub项目地址:
     https://github.com/Upsetin/ChinaUniOnline
 更新日期:
-    2021-01-10
+    2021-02-09
 '''
 
 import requests,csv,re,json,random,time
+
+def GetInfo():
+    import requests
+
+    url = "https://ssxx.univs.cn/cgi-bin/race/grade/?t=1612856369&activity_id=5f71e934bcdbf3a8c3ba5061"
+
+    payload = {}
+    headers = {
+        'authority': 'ssxx.univs.cn',
+        'sec-ch-ua': '"Chromium";v="88", "Google Chrome";v="88", ";Not A Brand";v="99"',
+        'accept': 'application/json, text/plain, */*',
+        'authorization': 'Bearer %s' % (token),
+        'sec-ch-ua-mobile': '?0',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'sec-fetch-site': 'same-origin',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-dest': 'empty',
+        'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
+        'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
+        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a; _gat=1'
+    }
+
+    response = requests.request("GET", url, headers=headers, data=payload)
+
+    return response.json()
 
 
 def ViewQR(url=''):
@@ -368,7 +393,7 @@ def CheckVerification():
     url = "https://ssxx.univs.cn/cgi-bin/check/verification/code/"
     response = requests.post(url, json=submit_data, headers=headers)
     result = json.loads(response.text)
-    print(result)
+    # print(result)
     return result["status"]
 
 
@@ -403,17 +428,24 @@ def SubmitVerification():
         # raise MyError(result["code"], "提交验证码失败：" + str(result))
     # return result["status"]
 
-token = ''
+token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE2MTI4NjcxMjcsImlhdCI6MTYxMjg1NjMyNywiaXNzIjoiSEVQRTM6QVVUSCIsIm5iZiI6MTYxMjg1NjMyNywidWlkIjoiNjAxOGUyMDBhMjNhOGM5ZTc3NmFmZWMxIiwibmFtZSI6Ilx1NzM4Ylx1ODY3OVx1Njc3MCIsImNvZGUiOiI2MDE4ZTIwMGEyM2E4YzllNzc2YWZlYzEiLCJpc19wZXJmZWN0Ijp0cnVlfQ.gJI-5Pn8VTBEtAheACGAkvs8srBRv3kp6lcXzjvoylI'
 Login()
 
 # CheckVerification()
 # SubmitVerification()
 
 # PK10()
-EndNum = int(input("暂只适配英雄篇,请输入的刷题次数 (55次稳上1000分): "))
+
+info = GetInfo()['data']
+print('欢迎你，来自%s的%s,当前积分:%s'%(info['university_name'],info['name'],info['integral']))
+EndNum = int(input("暂只适配英雄篇,请输入的刷题次数 (55次稳上1000分,积分更新有延迟，不用担心!): "))
 num = 0
 while num < EndNum:
+    info = GetInfo()['data']
+    print('\n当前积分:',info['integral'])
     num += 1
     print('\n英雄篇-正在第%s次刷题～'%(num))
     GetQuestions()
 
+info = GetInfo()['data']
+print('\n感谢使用!来自%s的%s,当前积分:%s'%(info['university_name'],info['name'],info['integral']))
