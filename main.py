@@ -58,7 +58,7 @@ def ViewQR(url=''):
 
 
 def ReadFile():
-    with open("题库.csv", "r") as f:
+    with open("题库.csv", "r",encoding='UTF-8') as f:
         reader = csv.reader(f)
         db = []
         for row in list(reader):
@@ -173,6 +173,8 @@ def GetOption(activity_id='5f71e934bcdbf3a8c3ba5061',question_id='5f17ef305d6fe0
     '''判断题目是否已在题库中'''
     db = ReadFile()
     for i in db:
+        if not i:
+            continue
         #在题库中
         if title in i[0]:
             print('在题库中已搜索到答案: %s - %s'%(i[0],i[1]))
