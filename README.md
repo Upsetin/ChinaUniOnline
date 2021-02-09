@@ -20,6 +20,6 @@
   下载可执行文件，将题库.csv与main.exe置于同一文件夹，直接运行即可.
  
 
-# 该项目蓝奏云下载地址 https://wws.lanzous.com/icCxYliascj 密码:2exc
+# 该项目蓝奏云下载地址(已更新) https://wws.lanzous.com/icCxYliascj 密码:2exc
 
 ## 若对您有所帮助，记得点个Star🌟！！！  
