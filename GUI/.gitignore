@@ -1,0 +1,4 @@
+*.log
+*.json
+test.png
+answers.db*

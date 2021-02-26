@@ -1,0 +1,3 @@
+PyQt6
+requests
+bs4
