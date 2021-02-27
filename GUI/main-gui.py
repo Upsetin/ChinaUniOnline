@@ -627,6 +627,7 @@ class UI(QWidget):
     def gen_conf(self):
         default_conf={
             "debug":False,
+            "proxy":"",
             "hero":{
                 "title":"英雄篇",
                 "enabled":True,
