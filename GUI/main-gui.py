@@ -42,8 +42,6 @@ class QLogger(logging.Handler):
 class TestProcessor():
     def __init__(self,show_qr_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,proxies:dict=None):
         self.logger=logging.getLogger(__name__)
-        if os.path.exists("config.json")==False:
-            self.gen_conf()
         with open(file="config.json",mode="r",encoding="utf-8") as conf_reader:
             self.conf=json.loads(conf_reader.read())
         self.session=requests.sessions.session()
@@ -243,13 +241,13 @@ class TestProcessor():
         else:
             caught_answer=self.process_ans(question_id=question_id,activity_id=activity_id,mode_id=mode_id,answer_ids=answers,catch=True)
             if caught_answer!=None:
-                self.logger.info("已捕获的答案：%s" %caught_answer)
+                self.logger.debug("已捕获的答案：%s" %caught_answer)
                 answer_titles=list()
                 for caught_answer_id in caught_answer:
                     for answer_id in op_result.keys():
                         if answer_id==caught_answer_id:
                             answer_titles.append(op_result[caught_answer_id].strip())
-                self.logger.debug("正确答案的可读名称列表：%s" %answer_titles)
+                self.logger.info("正确答案的可读名称列表：%s" %answer_titles)
                 if len(answer_titles)==1:
                     answer_str=answer_titles[0]
                 else:
@@ -328,48 +326,14 @@ class TestProcessor():
         if json_response["code"]==4823:
             self.submit_verify(mode_id=mode_id)
             self.finish(activity_id=activity_id,mode_id=mode_id,race_code=race_code)
-        owner=json_response["data"]["owner"]
-        self.logger.info("执行完成，正确数：%d，答题用时：%d 秒" %(owner["correct_amount"],owner["consume_time"]))
-        if json_response["data"]["opponent"]!={}:
-            opponent=json_response["data"]["opponent"]
-            self.logger.info("处于对战模式，对方信息：来自 %s 的 %s，正确数 %d，用时 %d秒" %(opponent["univ_name"],opponent["name"],opponent["correct_amount"],opponent["consume_time"]))
-    def gen_conf(self):
-        default_conf={
-            "debug":False,
-            "hero":{
-                "title":"英雄篇",
-                "enabled":True,
-                "times":1
-                },
-            "revival":{
-                "title":"复兴篇",
-                "enabled":True,
-                "times":1
-            },
-            "creation":{
-                "title":"创新篇",
-                "enabled":True,
-                "times":1
-            },
-            "belief":{
-                "title":"信念篇",
-                "enabled":True,
-                "times":1
-            },
-            "limit_time":{
-                "title":"限时赛",
-                "enabled":True,
-                "times":1
-            },
-            "rob":{
-                "title":"抢十赛",
-                "enabled":True,
-                "times":1
-            }
-        }
-        with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
-            conf_writer.write(json.dumps(default_conf,indent=4,sort_keys=True,ensure_ascii=False))
-        self.logger.info("已生成默认配置文件")
+        elif json_response["code"]==0:
+            owner=json_response["data"]["owner"]
+            self.logger.info("执行完成，正确数：%d，答题用时：%d 秒" %(owner["correct_amount"],owner["consume_time"]))
+            if json_response["data"]["opponent"]!={}:
+                opponent=json_response["data"]["opponent"]
+                self.logger.info("处于对战模式，对方信息：来自 %s 的 %s，正确数 %d，用时 %d秒" %(opponent["univ_name"],opponent["name"],opponent["correct_amount"],opponent["consume_time"]))
+        else:
+            self.logger.error("提交失败，请在调试模式下查看服务器返回数据以确定问题")
     def encrypt_with_pubkey(self,string:str,time_:int=int(time.time())):
         params={"t":time_}
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/base/public/key/",params=params).json()
@@ -512,6 +476,11 @@ class UI(QWidget):
         formatter=logging.Formatter(fmt="%(asctime)s-%(levelname)s-%(message)s",datefmt="%Y-%m-%d %H:%M:%S")
         filehandler=logging.FileHandler(filename="logs.log",mode="w",encoding="utf-8")
         handler=QLogger(update_signal=self.update_signal)
+        handler.setLevel(logging.INFO)
+        filehandler.setLevel(logging.INFO)
+        self.logger.setLevel(logging.INFO)
+        if os.path.exists("config.json")==False:
+            self.gen_conf()
         with open(file="config.json",mode="r",encoding="utf-8") as conf_reader:
             conf=json.loads(conf_reader.read())
         debug=bool(conf["debug"])
@@ -519,10 +488,6 @@ class UI(QWidget):
             handler.setLevel(logging.DEBUG)
             filehandler.setLevel(logging.DEBUG)
             self.logger.setLevel(logging.DEBUG)
-        else:
-            handler.setLevel(logging.INFO)
-            filehandler.setLevel(logging.INFO)
-            self.logger.setLevel(logging.INFO)
         handler.setFormatter(formatter)
         filehandler.setFormatter(formatter)
         self.logger.addHandler(handler)
@@ -630,6 +595,43 @@ class UI(QWidget):
         setting=SettingWindow(parent=self)
         setting.setStyleSheet("QDialog{border:none;border-radius:5px;background:#F5B461;}")
         setting.show()
+    def gen_conf(self):
+        default_conf={
+            "debug":False,
+            "hero":{
+                "title":"英雄篇",
+                "enabled":True,
+                "times":1
+                },
+            "revival":{
+                "title":"复兴篇",
+                "enabled":True,
+                "times":1
+            },
+            "creation":{
+                "title":"创新篇",
+                "enabled":True,
+                "times":1
+            },
+            "belief":{
+                "title":"信念篇",
+                "enabled":True,
+                "times":1
+            },
+            "limit_time":{
+                "title":"限时赛",
+                "enabled":True,
+                "times":1
+            },
+            "rob":{
+                "title":"抢十赛",
+                "enabled":True,
+                "times":1
+            }
+        }
+        with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
+            conf_writer.write(json.dumps(default_conf,indent=4,sort_keys=True,ensure_ascii=False))
+        self.logger.info("已生成默认配置文件")
     def mousePressEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标按压事件")
         super().mousePressEvent(event)
