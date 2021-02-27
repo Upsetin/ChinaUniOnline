@@ -1,3 +1,4 @@
-PyQt6
 requests
-bs4
+beautifulsoup4
+pycryptodome
+PyQt6
