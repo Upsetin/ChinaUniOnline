@@ -40,7 +40,7 @@ class QLogger(logging.Handler):
     def scroll_widget_to_bottom(self):
         self.widget.verticalScrollBar().setSliderPosition(self.widget.verticalScrollBar().maximum())
 class TestProcessor():
-    def __init__(self,show_qr_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,proxies:dict=None):
+    def __init__(self,show_qr_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal):
         self.logger=logging.getLogger(__name__)
         with open(file="config.json",mode="r",encoding="utf-8") as conf_reader:
             self.conf=json.loads(conf_reader.read())
@@ -54,8 +54,9 @@ class TestProcessor():
             "Origin":"https://ssxx.univs.cn"
             }
         self.session.headers.update(default_headers)
-        if proxies!=None:
-            self.session.proxies.update(proxies)
+        proxy=self.conf["proxy"]
+        if proxy!="":
+            self.session.proxies.update({"http":proxy,"https":proxy})
         self.activity_id="5f71e934bcdbf3a8c3ba5061"
         self.client="5f582dd3683c2e0ae3aaacee"
         while True:
@@ -377,15 +378,13 @@ class SettingWindow(QDialog):
         self.logger.debug("初始化设置界面。设置内容：%s" %self.conf)
         layout=QGridLayout()
         self.setLayout(layout)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setWindowFlag(Qt.WindowFlags.FramelessWindowHint)
-        self.setAutoFillBackground(True)
         self.setModal(True)
         self.setParent(parent)
         self.resize(400,300)
         title=QLabel("设置")
-        title.setStyleSheet("QLabel{border:none;border-radius:5px;background:transparent;color:#9AD3BC;font-size:60px;}")
+        title.setStyleSheet("QLabel{border:none;border-radius:5px;background:transparent;color:#9AD3BC;font-size:20px;}")
         title.setAlignment(Qt.Alignment.AlignCenter)
+        layout.addWidget(title,0,1,Qt.Alignment.AlignCenter)
         control_close=QPushButton()
         control_close.setStyleSheet("QPushButton{background:#FFE3ED;border-radius:5px;border:none;}QPushButton:hover{background:#EC524B;}")
         control_close.setToolTip("关闭")
@@ -394,12 +393,33 @@ class SettingWindow(QDialog):
         layout.addWidget(control_close,0,0)
         debug_check=QCheckBox("调试模式")
         debug_check.setChecked(self.conf["debug"])
-        debug_check.setStyleSheet("QCheckBox::indicator{width:10px;height:10px;border:none;border-radius:5px;background:#9BE3DE;}QCheckBox::indicator:unchecked{background:#BEEBE9;}QCheckBox::indicator:unchecked:hover{background:#9AD3BC;}QCheckBox::indicator:checked{background:#95E1D3;}")
+        debug_check.setToolTip("单击切换开关状态")
+        debug_check.setStyleSheet("QCheckBox::indicator{width:10px;height:10px;border:none;border-radius:5px;background:#9BE3DE;}QCheckBox::indicator:unchecked{background:#BEEBE9;}QCheckBox::indicator:unchecked:hover{background:#9AD3BC;}QCheckBox::indicator:checked{background:#95E1D3;}QCheckBox::indicator:checked:hover{background:#98DED9;}")
         self.content=QGridLayout()
-        self.show_setting(conf=self.conf,layout=self.content)# 返回content的最后一个元素的x,y
+        (x,y)=self.show_setting(conf=self.conf,layout=self.content)# 返回content的最后一个元素的x,y
+        proxy=QGroupBox()
+        proxy.setObjectName("proxy")
+        proxy_layout=QVBoxLayout()
+        proxy_label=QLabel("代理地址：")
+        proxy_label.setStyleSheet("QLabel{background:transparent;border:none;}")
+        proxy_input=EnhancedEdit()
+        proxy_input.setText(self.conf["proxy"])
+        proxy_input.setToolTip("格式为协议://IP:端口，留空保持直连")
+        proxy_input.setStyleSheet("QLineEdit{border:1px solid #F3EAC2;border-radius:5px;background:transparent;}QLineEdit:hover{border:1px solid #F5B461;}")
+        proxy_layout.addWidget(proxy_label)
+        proxy_layout.addWidget(proxy_input)
+        proxy.setLayout(proxy_layout)
+        proxy.setStyleSheet("QGroupBox{border-radius:5px;}")
+        proxy.setToolTip("代理设置")
+        if y+1>=3:
+            y_=0
+            x_=x+1
+        else:
+            y_=y+1
+            x_=x
+        self.content.addWidget(proxy,x_,y_)
         self.content.addWidget(debug_check)
         layout.addLayout(self.content,1,1)
-        self.setFocus()
     def close_callback(self):
         self.save_settings()
         self.logger.debug("已保存设置")
@@ -415,12 +435,17 @@ class SettingWindow(QDialog):
             elif type(layoutitem.widget())==QGroupBox:
                 group=layoutitem.widget()
                 for j in group.children():
-                    if type(j)==QCheckBox:
-                        enabled=j.isChecked()
-                    elif type(j)==EnhancedEdit:
-                        times=int(j.text())
-                data={"title":group.title(),"enabled":enabled,"times":times}
-                settings[group.objectName()]=data
+                    if group.objectName()=="proxy":
+                        data=""
+                        if type(j)==EnhancedEdit:
+                            data=str(j.text())
+                    else:
+                        if type(j)==QCheckBox:
+                            enabled=j.isChecked()
+                        elif type(j)==EnhancedEdit:
+                            times=int(j.text())
+                        data={"title":group.title(),"enabled":enabled,"times":times}
+                    settings[group.objectName()]=data
         self.logger.debug("设置数据：%s" %settings)
         with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
             conf_writer.write(json.dumps(settings,ensure_ascii=False,sort_keys=True,indent=4))
@@ -430,25 +455,28 @@ class SettingWindow(QDialog):
         y=0
         shape=3
         for key in conf.keys():
-            if type(conf[key])==bool:
+            if type(conf[key])==bool or type(conf[key])==str:
                 continue
             conf_title=conf[key]["title"]
             conf_enabled=conf[key]["enabled"]
             conf_times=conf[key]["times"]
             group=QGroupBox(conf_title)
             group.setStyleSheet("QGroupBox{border-radius:5px;}")
+            group.setToolTip(conf_title+"  的设置")
             enabled=QCheckBox("启用")
             enabled.setObjectName(key)
+            enabled.setToolTip("单击切换开关状态")
             enabled.setChecked(conf_enabled)
-            enabled.setStyleSheet("QCheckBox::indicator{width:10px;height:10px;border:none;border-radius:5px;background:#9BE3DE;}QCheckBox::indicator:unchecked{background:#BEEBE9;}QCheckBox::indicator:unchecked:hover{background:#9AD3BC;}QCheckBox::indicator:checked{background:#95E1D3;}")
+            enabled.setStyleSheet("QCheckBox::indicator{width:10px;height:10px;border:none;border-radius:5px;background:#9BE3DE;}QCheckBox::indicator:unchecked{background:#BEEBE9;}QCheckBox::indicator:unchecked:hover{background:#9AD3BC;}QCheckBox::indicator:checked{background:#95E1D3;}QCheckBox::indicator:checked:hover{background:#98DED9;}")
             times=QHBoxLayout()
             times_label=QLabel("次数：")
             times_label.setStyleSheet("QLabel{background:transparent;border:none;border-radius:5px;}")
             times_input=EnhancedEdit()
             times_input.setObjectName(key)
             times_input.setText(str(conf_times))
+            times_input.setToolTip("仅限正整数")
             times_input.setValidator(QRegularExpressionValidator(QRegularExpression("^[1-9][0-9]{1,8}$")))
-            times_input.setStyleSheet("QLineEdit{border-radius:5px;background:transparent;border:none;}")
+            times_input.setStyleSheet("QLineEdit{border:1px solid #F3EAC2;border-radius:5px;background:transparent;}QLineEdit:hover{border:1px solid #F5B461;}")
             times.addWidget(times_label)
             times.addWidget(times_input)
             group_layout=QVBoxLayout()
@@ -520,10 +548,11 @@ class UI(QWidget):
         self.control_min=QPushButton()
         self.control_min.setToolTip("最小化")
         self.control_min.setStyleSheet("QPushButton{background:#BEEBE9;border-radius:5px;border:none;}QPushButton:hover{background:#F3EAC2;}")
-        self.start_button=QPushButton("开始")
+        self.start_button=QPushButton("开始(&S)")
         self.start_button.setStyleSheet("QPushButton{background:#9BE3DE;border:none;border-radius:5px;font-size:20px;font-family:DengXian;}QPushButton:hover{background:#9AD3BC;}")
         self.start_button.setToolTip("开始")
         self.start_button.setFixedSize(120,60)
+        self.start_button.setDefault(True)
         setting_button=QPushButton("设置")
         setting_button.setToolTip("设置")
         setting_button.setFixedSize(60,60)
@@ -593,7 +622,7 @@ class UI(QWidget):
         self.qr_dialog.close()
     def setting_callback(self):
         setting=SettingWindow(parent=self)
-        setting.setStyleSheet("QDialog{border:none;border-radius:5px;background:#F5B461;}")
+        setting.setStyleSheet("QDialog{border:none;border-radius:5px;background:#F3EAC2;}")
         setting.show()
     def gen_conf(self):
         default_conf={

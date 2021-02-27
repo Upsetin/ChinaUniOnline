@@ -1,4 +1,4 @@
-requests
+requests[socks]
 beautifulsoup4
 pycryptodome
 PyQt6
