@@ -12,9 +12,7 @@ from PyQt6 import QtGui
 from PyQt6.QtGui import QMouseEvent, QPixmap, QRegularExpressionValidator
 from PyQt6.QtCore import QObject, QRegularExpression, QThread, Qt, pyqtBoundSignal, pyqtSignal
 from Crypto.PublicKey import RSA
-from Crypto.Hash import SHA
 from Crypto.Cipher import PKCS1_v1_5 as Cipher
-from Crypto.Signature import PKCS1_v1_5 as Signature
 from PyQt6.QtWidgets import QApplication, QCheckBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 from bs4 import BeautifulSoup
 os.chdir(os.path.split(os.path.realpath(__file__))[0])
@@ -75,8 +73,6 @@ class TestProcessor():
             time.sleep(0.5)
         qr=json_response["data"]["qrcode"]
         self.logger.debug("qr=%s" %qr)
-        oauth=json_response["data"]["oauth"] # 5a8009b491d78d0001d43ed3
-        oauth_with_application=json_response["data"]["oauthWithApplication"] # 5f59d15b513ef417b544c0ed
         self.session.headers.update({"Accept":"image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"})
         show_qr_signal.emit(self.session.get(qr).content)
         self.session.headers.update({"Accept":"application/json, text/plain, */*"})
@@ -115,8 +111,6 @@ class TestProcessor():
         self.logger.debug("获取用户信息：%s" %json_response)
         name=json_response["data"]["name"]
         university_name=json_response["data"]["university_name"]
-        id_=json_response["data"]["id"]
-        code=json_response["data"]["code"]
         zip_=json_response["data"]["zip"]
         mobile=json_response["data"]["mobile"]
         self.logger.info("用户 %s 来自 %s，手机号 %s" %(name,university_name,zip_+" "+mobile))
@@ -143,14 +137,22 @@ class TestProcessor():
         conn=sqlite3.connect("answers.db")
         self.cur=conn.cursor()
         self.logger.debug("已启动数据库连接")
+        whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
+        # 不应该休眠的模式的白名单列表
         for key in self.ids.keys():
             title=self.ids[key]["title"]
             enabled=self.ids[key]["enabled"]
             times=self.ids[key]["times"]
+            if key in whitelist_mode:
+                sleepflag=False
+                self.logger.debug("key=%s 关闭答题睡眠" %key)
+            else:
+                sleepflag=True
+                self.logger.debug("key=%s 启用答题睡眠" %key)
             if enabled==True:
                 for i in range(times):
                     self.logger.info("正在处理第 %d 次的 %s" %(i+1,title))
-                    self.process(mode_id=key)
+                    self.process(mode_id=key,sleep=sleepflag)
             else:
                 self.logger.info("%s 已跳过" %title)
         self.session.close()
@@ -159,7 +161,7 @@ class TestProcessor():
         self.cur.close()
         conn.close()
         self.logger.debug("已关闭数据库连接")
-    def process(self,mode_id:str):
+    def process(self,mode_id:str,sleep:bool=True):
         headers={"Referer":"https://ssxx.univs.cn/client/exam/%s/1/1/%s" %(self.activity_id,mode_id),}
         self.session.headers.update(headers)
         params={"t":str(int(time.time())),"activity_id":self.activity_id,"mode_id":mode_id,"way":"1"}
@@ -169,51 +171,70 @@ class TestProcessor():
         num=0
         SuccessNum=0
         FailNum=0
+        n="".join(random.choices(population=list(string.digits+string.ascii_letters),k=4))
+        # 验证码生成逻辑在js的1713行
+        self.logger.debug("生成验证码：%s" %n)
+        verify_pos=self.normal_choice_pos(lst=question_ids)
         for question_id in question_ids:
+            if sleep==True:
+                time.sleep(random.uniform(0,5))
+                # 随机休眠一段时间尝试规避速度过快导致的服务器警告
             i=question_ids.index(question_id)
             num=num+1
-            if i==10:
-                if self.check_verify(mode_id=mode_id)==True:
-                    self.logger.info("验证码已通过或无验证码")
-                else:
-                    self.submit_verify(mode_id=mode_id)
-                    self.logger.info("当前验证码状态：%s" %self.check_verify(mode_id=mode_id))
-            if self.get_option(activity_id=self.activity_id,question_id=question_id,mode_id=mode_id)==True:
+            if i==verify_pos:
+                veryfy=True
+            else:
+                veryfy=False
+            if self.get_option(activity_id=self.activity_id,question_id=question_id,mode_id=mode_id,veryfy=veryfy,n=n)==True:
                 SuccessNum=SuccessNum+1
                 self.logger.info("第 %d 道题目成功" %(i+1))
             else:
                 FailNum=FailNum+1
                 self.logger.info("第 %d 道题目失败" %(i+1))
         race_code=json_response["race_code"]
-        self.finish(race_code=race_code,activity_id=self.activity_id,mode_id=mode_id)
+        self.finish(race_code=race_code,activity_id=self.activity_id,mode_id=mode_id,n=n)
         self.logger.info("此次成功查询 %d 个题，收录 %d 个题" %(SuccessNum,FailNum))
-    def check_verify(self,mode_id):
+    def normal_choice_pos(self,lst:list):
+        mu=(len(lst)-1)/2
+        sigma=len(lst)/6
+        while True:
+            index=int(random.normalvariate(mu=mu,sigma=sigma))
+            if 0<=index<len(lst):
+                self.logger.debug("选中需要模拟验证的位置：%d" %index)
+                return index
+    def check_verify(self,mode_id:str,n:str):
         # 这里的code和下面的code应该是利用self.encrypt_with_pubkey()加密的结果
-        timestamp=int(time.time())
-        string_=str(timestamp)
-        code=self.encrypt_with_pubkey(string=string_,time_=timestamp)
-        self.logger.debug("encrypted_code=%s" %code)
-
-        code="E5ZKeoD8xezW4TVEn20JVHPFVJkBIfPg+zvMGW+kx1s29cUNFfNka1+1Fr7lUWsyUQhjiZXHDcUhbOYJLK4rS5MflFUvwSwd1B+1kul06t1z9x0mfxQZYggbnrJe3PKEk4etwG/rm3s3FFJd/EbFSdanfslt41aULzJzSIJ/HWI="
-
+        # n为验证码字符串
+        time_=time.time()
+        timestamp=int(time_)
+        code=self.encrypt_with_pubkey(string=n,time_=timestamp)
+        self.logger.debug("save_code=%s" %code)
         post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":"1","code":code}
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/check/verification/code/",json=post_data).json()
         return bool(json_response["status"])
-    def submit_verify(self,mode_id):
-
-        code="HD1bhUGI4d/FhRfIX4m972tZ0g3jRHIwH23ajyre9m1Jxyw4CQ1bMKeIG5T/voFOsKLmnazWkPe6yBbr+juVcMkPwqyafu4JCDePPsVEbVSjLt8OsiMgjloG1fPKANShQCHAX6BwpK33pEe8jSx55l3Ruz/HfcSjDLEHCATdKs4="
-
+    def submit_verify(self,mode_id:str,n:str):
+        # n为验证码字符串
+        time_=time.time()
+        code=self.encrypt_with_pubkey(string=n,time_=int(time_))
+        self.logger.debug("submit_code=%s" %code)
         post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":"1","code":code}
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/save/verification/code/",json=post_data).json()
         if json_response["code"]!=0:
             self.logger.error("提交验证码失败")
-            self.submit_verify(mode_id=mode_id)
+            self.submit_verify(mode_id=mode_id,n=n)
         else:
             self.logger.info("提交验证码成功")
-    def get_option(self,activity_id,question_id,mode_id):
+    def get_option(self,activity_id,question_id,mode_id,n:str,veryfy:bool=False):
         params={"t":str(int(time.time())),"activity_id":activity_id,"question_id":question_id,"mode_id":mode_id,"way":"1"}
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/race/question/",params=params).json()
         self.logger.debug("获取选项信息：%s" %json_response)
+        if veryfy==True:
+            #根据抓包结果，先获取了问题，再进行的验证码处理
+            if self.check_verify(mode_id=mode_id,n=n)==True:
+                self.logger.info("验证码已通过或无验证码")
+            else:
+                self.submit_verify(mode_id=mode_id,n=n)
+                self.logger.debug("当前验证码状态：%s" %self.check_verify(mode_id=mode_id,n=n))
         # 选项
         options_=json_response["data"]["options"]
         op_result={}
@@ -227,7 +248,7 @@ class TestProcessor():
         self.logger.debug("获取选项信息：%s" %op_result)
         # 题目
         title=self.clean_element(string_=json_response['data']['title'])
-        self.logger.debug("获取标题信息：%s" %title)
+        self.logger.info("题目：%s" %title)
         answer=self.search_ans(mode_id=mode_id,question=title)
         self.logger.debug("选择项目：%s" %op_result)
         if answer!=[]:
@@ -306,7 +327,7 @@ class TestProcessor():
                 element.extract()
                 cleaned=cleaned+1
         self.logger.debug("共清理 %d 个干扰元素" %cleaned)
-        return soup.get_text()
+        return soup.get_text().strip()
     def search_ans(self,mode_id:str,question:str):
         # 数据要求：一个问题对应一个答案，整张表内应该不存在同名问题，
         # 多个答案用#组合为一个字符串，查询时将自动按#切割为列表，无答案返回空列表
@@ -318,15 +339,15 @@ class TestProcessor():
             if res!=None:
                 return str(res[0]).split("#")
         return []
-    def finish(self,activity_id:str,mode_id:str,race_code:str):
+    def finish(self,activity_id:str,mode_id:str,race_code:str,n:str):
         payload={
             "race_code":race_code
         }
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/race/finish/",json=payload).json()
         self.logger.debug(json_response)
         if json_response["code"]==4823:
-            self.submit_verify(mode_id=mode_id)
-            self.finish(activity_id=activity_id,mode_id=mode_id,race_code=race_code)
+            self.submit_verify(mode_id=mode_id,n=n)
+            self.finish(activity_id=activity_id,mode_id=mode_id,race_code=race_code,n=n)
         elif json_response["code"]==0:
             owner=json_response["data"]["owner"]
             self.logger.info("执行完成，正确数：%d，答题用时：%d 秒" %(owner["correct_amount"],owner["consume_time"]))
@@ -340,21 +361,15 @@ class TestProcessor():
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/base/public/key/",params=params).json()
         pubkey=RSA.import_key(json_response["data"]["public_key"])
         cipher=Cipher.new(pubkey)
-        string_e=base64.b64encode(cipher.encrypt(string.encode())).decode()
-        return string_e
-    def verify_with_pubkey(self,string:str,signature:str,time_:int=int(time.time())):
-        params={"t":time_}
-        json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/base/public/key/",params=params).json()
-        pubkey=RSA.import_key(json_response["data"]["public_key"])
-        verifier=Signature.new(pubkey)
-        digest=SHA.new()
-        digest.update(string.encode())
-        try:
-            verifier.verify(digest,signature.encode())
-        except ValueError:
-            return False
-        else:
-            return True
+        return base64.b64encode(cipher.encrypt(string.encode())).decode()
+    def bootstrap(self,times:int=100):
+        # 初始化题目数据库，建议使用小号
+        self.logger.info("正在初始化题目数据库，强烈建议使用无关小号扫描小程序码")
+        self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
+        for key in self.ids.keys():
+            for i in range(times):
+                self.process(mode_id=key,sleep=False)
+        self.logger.info("初始化数据库成功")
 class Work(QObject):
     def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal):
         super().__init__()
@@ -367,6 +382,21 @@ class Work(QObject):
         self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal)
         self.logger.debug("已实例化处理类")
         self.processor.start()
+        self.finish_signal.emit()
+        self.logger.debug("已提交终止信号")
+class BootStrap(QObject):
+    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,times:int=100):
+        super().__init__()
+        self.logger=logging.getLogger(__name__)
+        self.show_qr_signal=show_qr_signal
+        self.finish_signal=finish_signal
+        self.close_qr_signal=close_qr_signal
+        self.times=times
+    def start(self):
+        self.logger.debug("正在启动子线程")
+        self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal)
+        self.logger.debug("已实例化处理类")
+        self.processor.bootstrap(times=self.times)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
 class SettingWindow(QDialog):
@@ -435,10 +465,8 @@ class SettingWindow(QDialog):
             elif type(layoutitem.widget())==QGroupBox:
                 group=layoutitem.widget()
                 for j in group.children():
-                    if group.objectName()=="proxy":
-                        data=""
-                        if type(j)==EnhancedEdit:
-                            data=str(j.text())
+                    if group.objectName()=="proxy" and type(j)==EnhancedEdit:
+                        data=str(j.text())
                     else:
                         if type(j)==QCheckBox:
                             enabled=j.isChecked()
@@ -555,12 +583,22 @@ class UI(QWidget):
         self.start_button.setDefault(True)
         setting_button=QPushButton("设置")
         setting_button.setToolTip("设置")
-        setting_button.setFixedSize(60,60)
+        setting_button.setFixedSize(60,30)
         setting_button.setStyleSheet("QPushButton{background:#9BE3DE;border:none;border-radius:5px;font-size:20px;font-family:DengXian;}QPushButton:hover{background:#9AD3BC;}")
         setting_button.clicked.connect(self.setting_callback)
+        self.bootstrap_=QPushButton("生成题库")
+        self.bootstrap_.setToolTip("通过答题生成题目数据库")
+        self.bootstrap_.setFixedSize(60,30)
+        self.bootstrap_.setStyleSheet("QPushButton{background:#9BE3DE;border:none;border-radius:5px;font-size:10px;font-family:DengXian;}QPushButton:hover{background:#9AD3BC;}")
+        self.bootstrap_.clicked.connect(self.bootstrap)
+        self.bootstrap_.setEnabled(not os.path.exists("answers.db"))
+        config_layout=QVBoxLayout()
+        config_layout.setSpacing(0)
+        config_layout.addWidget(setting_button)
+        config_layout.addWidget(self.bootstrap_)
         start=QHBoxLayout()
         start.addWidget(self.start_button,2)
-        start.addWidget(setting_button,1)
+        start.addLayout(config_layout,1)
         self.control_close.clicked.connect(self.close)
         self.control_min.clicked.connect(self.min_callback)
         self.contron_max.clicked.connect(self.max_callback)
@@ -579,6 +617,19 @@ class UI(QWidget):
         handler.widget.textChanged.connect(handler.scroll_widget_to_bottom)
         self.show_qr_signal.connect(self.show_qr)
         self.logger.debug("已初始化UI")
+    def bootstrap(self):
+        bootstrap_thread=QThread()
+        bootstrap=BootStrap(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal)
+        bootstrap.moveToThread(bootstrap_thread)
+        bootstrap_thread.started.connect(bootstrap.start)
+        bootstrap_thread.finished.connect(self.finish_bootstrap)
+        self.logger.debug("准备执行数据库初始化")
+        self.bootstrap_.setEnabled(False)
+        self.bootstrap_.setText("执行中...")
+    def finish_bootstrap(self):
+        self.logger.debug("初始化数据库完成")
+        self.bootstrap_.setEnabled(True)
+        self.bootstrap_.setText("生成题库")
     def min_callback(self):
         if self.isMinimized()==False:
             self.showMinimized()
@@ -596,14 +647,14 @@ class UI(QWidget):
         self.start_button.setText("执行中...")
     def finish_callback(self):
         self.start_button.setEnabled(True)
-        self.start_button.setText("开始")
+        self.start_button.setText("开始(&S)")
         passed_time=time.time()-self.start_time
         mins,secs=divmod(passed_time,60)
         hours,mins=divmod(mins,60)
         self.logger.info("执行完成，共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)))
     def show_qr(self,qr:bytes):
         title_label=QLabel("请使用微信扫描小程序码完成登陆")
-        title_label.setStyleSheet("QLabel{color:#ffe3ed;border:none;background-color:transparent;border-radius:5px;}")
+        title_label.setStyleSheet("QLabel{color:#ffe3ed;border:none;background-color:transparent;border-radius:5px;font-size:25px;}")
         title_label.setAlignment(Qt.Alignment.AlignCenter)
         title_label.setFixedHeight(20)
         qr_label=QLabel()
@@ -627,6 +678,7 @@ class UI(QWidget):
     def gen_conf(self):
         default_conf={
             "debug":False,
+            "proxy":"",
             "hero":{
                 "title":"英雄篇",
                 "enabled":True,
