@@ -378,12 +378,11 @@ class TestProcessor():
             return False
         else:
             return True
-    def bootstrap(self):
-        number=100
+    def bootstrap(self,times:int=100):
         # 初始化题目数据库，建议使用小号
         self.logger.info("正在初始化题目数据库，强烈建议使用无关小号扫描小程序码")
         for key in self.ids.keys():
-            for i in range(number):
+            for i in range(times):
                 self.process(mode_id=key,sleep=False)
         self.logger.info("初始化数据库成功")
 class Work(QObject):
@@ -401,17 +400,18 @@ class Work(QObject):
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
 class BootStrap(QObject):
-    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal):
+    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,times:int=100):
         super().__init__()
         self.logger=logging.getLogger(__name__)
         self.show_qr_signal=show_qr_signal
         self.finish_signal=finish_signal
         self.close_qr_signal=close_qr_signal
+        self.times=times
     def start(self):
         self.logger.debug("正在启动子线程")
         self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal)
         self.logger.debug("已实例化处理类")
-        self.processor.bootstrap()
+        self.processor.bootstrap(times=self.times)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
 class SettingWindow(QDialog):
