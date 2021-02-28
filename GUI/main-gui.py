@@ -204,20 +204,22 @@ class TestProcessor():
         # n为验证码字符串
         time_=time.time()
         timestamp=int(time_)
-        time_=time_*1000
-        string_=""
-        code=self.encrypt_with_pubkey(string=string_,time_=timestamp)
-        self.logger.debug("encrypted_code=%s" %code)
+        timestamp_ms=int(round(time_ * 1000))# 毫秒级时间戳
+        code=self.encrypt_with_pubkey(string=n,time_=timestamp)
+        self.logger.debug("save_code=%s" %code)
 
-        code="E5ZKeoD8xezW4TVEn20JVHPFVJkBIfPg+zvMGW+kx1s29cUNFfNka1+1Fr7lUWsyUQhjiZXHDcUhbOYJLK4rS5MflFUvwSwd1B+1kul06t1z9x0mfxQZYggbnrJe3PKEk4etwG/rm3s3FFJd/EbFSdanfslt41aULzJzSIJ/HWI="
+        #code="E5ZKeoD8xezW4TVEn20JVHPFVJkBIfPg+zvMGW+kx1s29cUNFfNka1+1Fr7lUWsyUQhjiZXHDcUhbOYJLK4rS5MflFUvwSwd1B+1kul06t1z9x0mfxQZYggbnrJe3PKEk4etwG/rm3s3FFJd/EbFSdanfslt41aULzJzSIJ/HWI="
 
         post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":"1","code":code}
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/check/verification/code/",json=post_data).json()
         return bool(json_response["status"])
     def submit_verify(self,mode_id:str,n:str):
         # n为验证码字符串
+        time_=time.time()
+        code=self.encrypt_with_pubkey(string=n,time_=int(time_))
+        self.logger.debug("submit_code=%s" %code)
 
-        code="HD1bhUGI4d/FhRfIX4m972tZ0g3jRHIwH23ajyre9m1Jxyw4CQ1bMKeIG5T/voFOsKLmnazWkPe6yBbr+juVcMkPwqyafu4JCDePPsVEbVSjLt8OsiMgjloG1fPKANShQCHAX6BwpK33pEe8jSx55l3Ruz/HfcSjDLEHCATdKs4="
+        #code="HD1bhUGI4d/FhRfIX4m972tZ0g3jRHIwH23ajyre9m1Jxyw4CQ1bMKeIG5T/voFOsKLmnazWkPe6yBbr+juVcMkPwqyafu4JCDePPsVEbVSjLt8OsiMgjloG1fPKANShQCHAX6BwpK33pEe8jSx55l3Ruz/HfcSjDLEHCATdKs4="
 
         post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":"1","code":code}
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/save/verification/code/",json=post_data).json()
@@ -363,8 +365,7 @@ class TestProcessor():
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/base/public/key/",params=params).json()
         pubkey=RSA.import_key(json_response["data"]["public_key"])
         cipher=Cipher.new(pubkey)
-        string_e=base64.b64encode(cipher.encrypt(string.encode())).decode()
-        return string_e
+        return base64.b64encode(cipher.encrypt(string.encode())).decode()
     def verify_with_pubkey(self,string:str,signature:str,time_:int=int(time.time())):
         params={"t":time_}
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/base/public/key/",params=params).json()
@@ -381,6 +382,7 @@ class TestProcessor():
     def bootstrap(self,times:int=100):
         # 初始化题目数据库，建议使用小号
         self.logger.info("正在初始化题目数据库，强烈建议使用无关小号扫描小程序码")
+        self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
         for key in self.ids.keys():
             for i in range(times):
                 self.process(mode_id=key,sleep=False)
@@ -480,10 +482,8 @@ class SettingWindow(QDialog):
             elif type(layoutitem.widget())==QGroupBox:
                 group=layoutitem.widget()
                 for j in group.children():
-                    if group.objectName()=="proxy":
-                        data=""
-                        if type(j)==EnhancedEdit:
-                            data=str(j.text())
+                    if group.objectName()=="proxy" and type(j)==EnhancedEdit:
+                        data=str(j.text())
                     else:
                         if type(j)==QCheckBox:
                             enabled=j.isChecked()
@@ -604,7 +604,7 @@ class UI(QWidget):
         setting_button.setStyleSheet("QPushButton{background:#9BE3DE;border:none;border-radius:5px;font-size:20px;font-family:DengXian;}QPushButton:hover{background:#9AD3BC;}")
         setting_button.clicked.connect(self.setting_callback)
         self.bootstrap_=QPushButton("生成题库")
-        self.bootstrap_.setToolTip("生成题目数据库")
+        self.bootstrap_.setToolTip("通过答题生成题目数据库")
         self.bootstrap_.setFixedSize(60,30)
         self.bootstrap_.setStyleSheet("QPushButton{background:#9BE3DE;border:none;border-radius:5px;font-size:10px;font-family:DengXian;}QPushButton:hover{background:#9AD3BC;}")
         self.bootstrap_.clicked.connect(self.bootstrap)
@@ -671,7 +671,7 @@ class UI(QWidget):
         self.logger.info("执行完成，共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)))
     def show_qr(self,qr:bytes):
         title_label=QLabel("请使用微信扫描小程序码完成登陆")
-        title_label.setStyleSheet("QLabel{color:#ffe3ed;border:none;background-color:transparent;border-radius:5px;}")
+        title_label.setStyleSheet("QLabel{color:#ffe3ed;border:none;background-color:transparent;border-radius:5px;font-size:25px;}")
         title_label.setAlignment(Qt.Alignment.AlignCenter)
         title_label.setFixedHeight(20)
         qr_label=QLabel()
