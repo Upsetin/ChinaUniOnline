@@ -12,9 +12,7 @@ from PyQt6 import QtGui
 from PyQt6.QtGui import QMouseEvent, QPixmap, QRegularExpressionValidator
 from PyQt6.QtCore import QObject, QRegularExpression, QThread, Qt, pyqtBoundSignal, pyqtSignal
 from Crypto.PublicKey import RSA
-from Crypto.Hash import SHA
 from Crypto.Cipher import PKCS1_v1_5 as Cipher
-from Crypto.Signature import PKCS1_v1_5 as Signature
 from PyQt6.QtWidgets import QApplication, QCheckBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 from bs4 import BeautifulSoup
 os.chdir(os.path.split(os.path.realpath(__file__))[0])
@@ -75,8 +73,6 @@ class TestProcessor():
             time.sleep(0.5)
         qr=json_response["data"]["qrcode"]
         self.logger.debug("qr=%s" %qr)
-        oauth=json_response["data"]["oauth"] # 5a8009b491d78d0001d43ed3
-        oauth_with_application=json_response["data"]["oauthWithApplication"] # 5f59d15b513ef417b544c0ed
         self.session.headers.update({"Accept":"image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"})
         show_qr_signal.emit(self.session.get(qr).content)
         self.session.headers.update({"Accept":"application/json, text/plain, */*"})
@@ -115,8 +111,6 @@ class TestProcessor():
         self.logger.debug("获取用户信息：%s" %json_response)
         name=json_response["data"]["name"]
         university_name=json_response["data"]["university_name"]
-        id_=json_response["data"]["id"]
-        code=json_response["data"]["code"]
         zip_=json_response["data"]["zip"]
         mobile=json_response["data"]["mobile"]
         self.logger.info("用户 %s 来自 %s，手机号 %s" %(name,university_name,zip_+" "+mobile))
@@ -177,16 +171,17 @@ class TestProcessor():
         num=0
         SuccessNum=0
         FailNum=0
-        n="".join(random.sample(string.digits+string.ascii_letters,4))
+        n="".join(random.choices(population=list(string.digits+string.ascii_letters),k=4))
         # 验证码生成逻辑在js的1713行
         self.logger.debug("生成验证码：%s" %n)
+        verify_pos=self.normal_choice_pos(lst=question_ids)
         for question_id in question_ids:
             if sleep==True:
                 time.sleep(random.uniform(0,5))
                 # 随机休眠一段时间尝试规避速度过快导致的服务器警告
             i=question_ids.index(question_id)
             num=num+1
-            if i==10:
+            if i==verify_pos:
                 veryfy=True
             else:
                 veryfy=False
@@ -199,17 +194,21 @@ class TestProcessor():
         race_code=json_response["race_code"]
         self.finish(race_code=race_code,activity_id=self.activity_id,mode_id=mode_id,n=n)
         self.logger.info("此次成功查询 %d 个题，收录 %d 个题" %(SuccessNum,FailNum))
+    def normal_choice_pos(self,lst:list):
+        mu=(len(lst)-1)/2
+        sigma=len(lst)/6
+        while True:
+            index=int(random.normalvariate(mu=mu,sigma=sigma))
+            if 0<=index<len(lst):
+                self.logger.debug("选中需要模拟验证的位置：%d" %index)
+                return index
     def check_verify(self,mode_id:str,n:str):
         # 这里的code和下面的code应该是利用self.encrypt_with_pubkey()加密的结果
         # n为验证码字符串
         time_=time.time()
         timestamp=int(time_)
-        timestamp_ms=int(round(time_ * 1000))# 毫秒级时间戳
         code=self.encrypt_with_pubkey(string=n,time_=timestamp)
         self.logger.debug("save_code=%s" %code)
-
-        #code="E5ZKeoD8xezW4TVEn20JVHPFVJkBIfPg+zvMGW+kx1s29cUNFfNka1+1Fr7lUWsyUQhjiZXHDcUhbOYJLK4rS5MflFUvwSwd1B+1kul06t1z9x0mfxQZYggbnrJe3PKEk4etwG/rm3s3FFJd/EbFSdanfslt41aULzJzSIJ/HWI="
-
         post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":"1","code":code}
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/check/verification/code/",json=post_data).json()
         return bool(json_response["status"])
@@ -218,9 +217,6 @@ class TestProcessor():
         time_=time.time()
         code=self.encrypt_with_pubkey(string=n,time_=int(time_))
         self.logger.debug("submit_code=%s" %code)
-
-        #code="HD1bhUGI4d/FhRfIX4m972tZ0g3jRHIwH23ajyre9m1Jxyw4CQ1bMKeIG5T/voFOsKLmnazWkPe6yBbr+juVcMkPwqyafu4JCDePPsVEbVSjLt8OsiMgjloG1fPKANShQCHAX6BwpK33pEe8jSx55l3Ruz/HfcSjDLEHCATdKs4="
-
         post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":"1","code":code}
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/save/verification/code/",json=post_data).json()
         if json_response["code"]!=0:
@@ -366,19 +362,6 @@ class TestProcessor():
         pubkey=RSA.import_key(json_response["data"]["public_key"])
         cipher=Cipher.new(pubkey)
         return base64.b64encode(cipher.encrypt(string.encode())).decode()
-    def verify_with_pubkey(self,string:str,signature:str,time_:int=int(time.time())):
-        params={"t":time_}
-        json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/base/public/key/",params=params).json()
-        pubkey=RSA.import_key(json_response["data"]["public_key"])
-        verifier=Signature.new(pubkey)
-        digest=SHA.new()
-        digest.update(string.encode())
-        try:
-            verifier.verify(digest,signature.encode())
-        except ValueError:
-            return False
-        else:
-            return True
     def bootstrap(self,times:int=100):
         # 初始化题目数据库，建议使用小号
         self.logger.info("正在初始化题目数据库，强烈建议使用无关小号扫描小程序码")
