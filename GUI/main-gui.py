@@ -604,7 +604,6 @@ class UI(QWidget):
                     }
                 }
                 self.write_theme(name="default",theme=theme)
-
             self.name=theme["name"]
             self.opacity=theme["opacity"]
             self.size=theme["size"]
@@ -752,17 +751,14 @@ class UI(QWidget):
         self.bootstrap_.setText("执行中...")
         self.start_button.setEnabled(False)
         bootstrap_thread.start()
-    
     def finish_bootstrap(self):
         self.logger.debug("初始化数据库完成")
         self.bootstrap_.setEnabled(True)
         self.bootstrap_.setText("生成题库")
         self.start_button.setEnabled(True)
-    
     def min_callback(self):
         if self.isMinimized()==False:
             self.showMinimized()
-    
     def max_callback(self):
         if self.isMaximized()==False:
             self.showMaximized()
@@ -770,23 +766,21 @@ class UI(QWidget):
         else:
             self.showNormal()
             self.contron_max.setToolTip("最大化")
-    
     def start_callback(self):
         self.start_time=time.time()
         self.work_thread.start()
         self.start_button.setEnabled(False)
-        self.bootstrap_.setEnabled(False)
+        if self.bootstrap_.isEnabled()==True:
+            self.bootstrap_.setEnabled(False)
         self.start_button.setText("执行中...")
-    
     def finish_callback(self):
         self.start_button.setEnabled(True)
-        self.bootstrap_.setEnabled(True)
+        self.bootstrap_.setEnabled(False)
         self.start_button.setText("开始(&S)")
         passed_time=time.time()-self.start_time
         mins,secs=divmod(passed_time,60)
         hours,mins=divmod(mins,60)
         self.logger.info("执行完成，共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)))
-    
     def show_qr(self,qr:bytes):
         title_label=QLabel("请使用微信扫描小程序码完成登陆")
         title_label.setStyleSheet(self.theme.qr_title)
@@ -804,10 +798,8 @@ class UI(QWidget):
         self.qr_dialog.setLayout(layout_)
         self.main_layout.addWidget(self.qr_dialog,1,1,Qt.Alignment.AlignCenter)
         self.qr_dialog.show()
-    
     def close_qr(self):
-        self.qr_dialog.close()
-    
+        self.qr_dialog.close()    
     def setting_callback(self):
         setting=SettingWindow(parent=self,theme=self.theme.setting)
         setting.setStyleSheet(self.theme.setting_window)
@@ -879,3 +871,4 @@ if __name__=="__main__":
     ui=UI()
     ui.show()
     sys.exit(app.exec())
+    
