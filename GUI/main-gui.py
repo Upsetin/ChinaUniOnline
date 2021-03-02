@@ -10,7 +10,7 @@ import logging
 import requests
 from PyQt6 import QtGui
 from PyQt6.QtGui import QMouseEvent, QPixmap, QRegularExpressionValidator
-from PyQt6.QtCore import QObject, QRegularExpression, QThread, Qt, pyqtBoundSignal, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QRegularExpression, QThread, Qt, pyqtBoundSignal, pyqtSignal
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5 as Cipher
 from PyQt6.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
@@ -473,7 +473,6 @@ class SettingWindow(QDialog):
             self.content.addWidget(widget,x,y)
         self.content.addWidget(debug_check)
         layout.addLayout(self.content,1,1)
-    @pyqtSlot()
     def close_callback(self):
         self.save_settings()
         self.logger.debug("已保存设置")
@@ -742,7 +741,6 @@ class UI(QWidget):
         handler.widget.textChanged.connect(handler.scroll_widget_to_bottom)
         self.show_qr_signal.connect(self.show_qr)
         self.logger.debug("当前调试状态：%s，使用样式：%s，完成UI初始化" %(debug,self.theme.name))
-    @pyqtSlot()
     def bootstrap(self):
         bootstrap_thread=QThread()
         bootstrap=BootStrap(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal)
@@ -754,17 +752,17 @@ class UI(QWidget):
         self.bootstrap_.setText("执行中...")
         self.start_button.setEnabled(False)
         bootstrap_thread.start()
-    @pyqtSlot()
+    
     def finish_bootstrap(self):
         self.logger.debug("初始化数据库完成")
         self.bootstrap_.setEnabled(True)
         self.bootstrap_.setText("生成题库")
         self.start_button.setEnabled(True)
-    @pyqtSlot()
+    
     def min_callback(self):
         if self.isMinimized()==False:
             self.showMinimized()
-    @pyqtSlot()
+    
     def max_callback(self):
         if self.isMaximized()==False:
             self.showMaximized()
@@ -772,14 +770,14 @@ class UI(QWidget):
         else:
             self.showNormal()
             self.contron_max.setToolTip("最大化")
-    @pyqtSlot()
+    
     def start_callback(self):
         self.start_time=time.time()
         self.work_thread.start()
         self.start_button.setEnabled(False)
         self.bootstrap_.setEnabled(False)
         self.start_button.setText("执行中...")
-    @pyqtSlot()
+    
     def finish_callback(self):
         self.start_button.setEnabled(True)
         self.bootstrap_.setEnabled(True)
@@ -788,7 +786,7 @@ class UI(QWidget):
         mins,secs=divmod(passed_time,60)
         hours,mins=divmod(mins,60)
         self.logger.info("执行完成，共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)))
-    @pyqtSlot()
+    
     def show_qr(self,qr:bytes):
         title_label=QLabel("请使用微信扫描小程序码完成登陆")
         title_label.setStyleSheet(self.theme.qr_title)
@@ -806,10 +804,10 @@ class UI(QWidget):
         self.qr_dialog.setLayout(layout_)
         self.main_layout.addWidget(self.qr_dialog,1,1,Qt.Alignment.AlignCenter)
         self.qr_dialog.show()
-    @pyqtSlot()
+    
     def close_qr(self):
         self.qr_dialog.close()
-    @pyqtSlot()
+    
     def setting_callback(self):
         setting=SettingWindow(parent=self,theme=self.theme.setting)
         setting.setStyleSheet(self.theme.setting_window)
