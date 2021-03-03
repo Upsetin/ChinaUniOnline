@@ -177,7 +177,7 @@ class TestProcessor():
         verify_pos=self.normal_choice_pos(lst=question_ids)
         for question_id in question_ids:
             if sleep==True:
-                time.sleep(random.uniform(0,5))
+                time.sleep(random.uniform(0,3))
                 # 随机休眠一段时间尝试规避速度过快导致的服务器警告
             i=question_ids.index(question_id)
             num=num+1
@@ -219,9 +219,9 @@ class TestProcessor():
         self.logger.debug("submit_code=%s" %code)
         post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":"1","code":code}
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/save/verification/code/",json=post_data).json()
+        self.logger.debug("submit_response=%s" %json_response)
         if json_response["code"]!=0:
             self.logger.error("提交验证码失败")
-            self.submit_verify(mode_id=mode_id,n=n)
         else:
             self.logger.info("提交验证码成功")
     def get_option(self,activity_id,question_id,mode_id,n:str,veryfy:bool=False):
@@ -351,7 +351,7 @@ class TestProcessor():
         elif json_response["code"]==0:
             owner=json_response["data"]["owner"]
             self.logger.info("执行完成，正确数：%d，答题用时：%d 秒" %(owner["correct_amount"],owner["consume_time"]))
-            if json_response["data"]["opponent"]!={}:
+            if json_response["data"]["opponent"]!=None and json_response["data"]["opponent"]!={}:
                 opponent=json_response["data"]["opponent"]
                 self.logger.info("处于对战模式，对方信息：来自 %s 的 %s，正确数 %d，用时 %d秒" %(opponent["univ_name"],opponent["name"],opponent["correct_amount"],opponent["consume_time"]))
         else:
@@ -362,7 +362,7 @@ class TestProcessor():
         pubkey=RSA.import_key(json_response["data"]["public_key"])
         cipher=Cipher.new(pubkey)
         return base64.b64encode(cipher.encrypt(string.encode())).decode()
-    def bootstrap(self,times:int=100):
+    def bootstrap(self,times:int=30):
         # 初始化题目数据库，建议使用小号
         self.logger.info("正在初始化题目数据库，强烈建议使用无关小号扫描小程序码")
         self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
@@ -385,7 +385,7 @@ class Work(QObject):
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
 class BootStrap(QObject):
-    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,times:int=100):
+    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,times:int=30):
         super().__init__()
         self.logger=logging.getLogger(__name__)
         self.show_qr_signal=show_qr_signal
@@ -436,7 +436,8 @@ class SettingWindow(QDialog):
         proxy_input=EnhancedEdit()
         proxy_input.setPlaceholderText("(无)")
         proxy_input.setText(self.conf["proxy"])
-        proxy_input.setToolTip("格式为协议://IP:端口，留空保持直连")
+        proxy_input.setValidator(QRegularExpressionValidator(QRegularExpression("^(http[s]{0,1}|socks5)://(.*:.*@)?([^/:]+)(:[1-6][0-9]{0,4})?$")))
+        proxy_input.setToolTip("格式为协议://[用户名:密码@]IP:端口，留空保持直连")
         proxy_input.setStyleSheet(theme["line_edit"])
         proxy_layout.addWidget(proxy_label)
         proxy_layout.addWidget(proxy_input)
@@ -526,7 +527,7 @@ class SettingWindow(QDialog):
             times_input=EnhancedEdit()
             times_input.setObjectName(key)
             times_input.setText(str(conf_times))
-            times_input.setToolTip("仅限正整数")
+            times_input.setToolTip("仅限正整数，过多的次数（>50次/项）可能导致掉登陆")
             times_input.setValidator(QRegularExpressionValidator(QRegularExpression("^[1-9][0-9]{1,8}$")))
             times_input.setStyleSheet(theme["line_edit"])
             times.addWidget(times_label)
