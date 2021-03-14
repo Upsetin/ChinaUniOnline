@@ -8,6 +8,7 @@ import time
 import string
 import logging
 import requests
+from urllib import parse
 from PyQt6 import QtGui
 from PyQt6.QtGui import QMouseEvent, QPixmap, QRegularExpressionValidator
 from PyQt6.QtCore import QObject, QRegularExpression, QThread, Qt, pyqtBoundSignal, pyqtSignal
@@ -42,6 +43,8 @@ class TestProcessor():
         self.logger=logging.getLogger(__name__)
         with open(file="config.json",mode="r",encoding="utf-8") as conf_reader:
             self.conf=json.loads(conf_reader.read())
+        self.show_qr_signal=show_qr_signal
+        self.close_qr_signal=close_qr_signal
         self.session=requests.sessions.session()
         default_headers={
             "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36 Edg/88.0.705.74",
@@ -57,64 +60,7 @@ class TestProcessor():
             self.session.proxies.update({"http":proxy,"https":proxy})
         self.activity_id="5f71e934bcdbf3a8c3ba5061"
         self.client="5f582dd3683c2e0ae3aaacee"
-        while True:
-            random_="".join(random.sample(string.digits+string.ascii_letters,random.randrange(20,21))) # FAJ25n9gl2mXEkGgrljtq
-            self.logger.debug("random=%s" %random_)
-            self.logger.info("正在获取二维码")
-            # fxxk腾讯！这参数的True和False得用文本，还区分大小写
-            params={"random":random_,"useSelfWxapp":"true","enableFetchPhone":"false"}
-            json_response=self.session.get("https://oauth.u.hep.com.cn/oauth/wxapp/qrcode/%s" %self.client,params=params).json()
-            self.logger.debug("response=%s" %json_response)
-            if json_response["data"]["success"]==True:
-                self.logger.error("此二维码已被使用过")
-            else:
-                self.logger.debug("此二维码未被使用过")
-                break
-            time.sleep(0.5)
-        qr=json_response["data"]["qrcode"]
-        self.logger.debug("qr=%s" %qr)
-        self.session.headers.update({"Accept":"image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"})
-        show_qr_signal.emit(self.session.get(qr).content)
-        self.session.headers.update({"Accept":"application/json, text/plain, */*"})
-        while True:
-            try:
-                post_data={"random":random_,"useSelfWxapp":"true"}
-                json_response=self.session.post("https://oauth.u.hep.com.cn/oauth/wxapp/confirm/qr",params=post_data).json()
-            except:
-                self.logger.error("确认QR码扫描状态过程中传输数据出错，将继续")
-            else:
-                if json_response["data"]["code"]==200:
-                    salt=json_response["data"]["data"]["salt"] # 0kibedg2ei2b5
-                    _id=json_response["data"]["data"]["_id"] # 5fc8400785e70a5d71bd2c44
-                    unionid=json_response["data"]["data"]["unionid"] # oTzSV0g53KTuiT5utMgMvvzgB1qw
-                    username=json_response["data"]["data"]["username"] # zhanghua
-                    self.token=json_response["data"]["data"]["token"]
-                    params={"t":str(int(time.time())),"uid":_id}
-                    json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/authorize/token/",params=params).json()
-                    self.token=json_response["token"]
-                    self.refresh_token=json_response["refresh_token"]
-                    self.logger.info("用户 %s 登陆成功" %(username))
-                    self.logger.debug("token=%s" %self.token)
-                    close_qr_signal.emit()
-                    break
-                elif json_response["data"]["code"]==500:
-                    self.logger.debug("本次轮询二维码验证结果失败，继续等待")
-                time.sleep(1.0)
-            finally:
-                self.logger.debug("response=%s" %json_response)
-        headers={
-            "Referer":"https://ssxx.univs.cn/clientLogin?redirect=/client/detail/%s" %self.activity_id,
-            "Authorization":"Bearer %s" %self.token}
-        self.session.headers.update(headers)
-        params={"t":str(int(time.time()))}
-        json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/portal/user/",params=params).json()
-        self.logger.debug("获取用户信息：%s" %json_response)
-        name=json_response["data"]["name"]
-        university_name=json_response["data"]["university_name"]
-        zip_=json_response["data"]["zip"]
-        mobile=json_response["data"]["mobile"]
-        self.logger.info("用户 %s 来自 %s，手机号 %s" %(name,university_name,zip_+" "+mobile))
-        self.session.headers.update({"Referer": "https://ssxx.univs.cn/client/detail/%s" %(self.activity_id)})
+        self.login()
         params={"t":str(int(time.time())),"id":self.activity_id}
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/portal/activity/",params=params).json()
         self.activity_id=json_response["data"]["id"]
@@ -124,15 +70,144 @@ class TestProcessor():
         self.ids={}
         for mode in modes:
             self.ids[mode["id"]]={"title":mode["title"],"enabled":self.is_enabled(title=mode["title"]),"times":self.times(title=mode["title"])}
+    def login(self,keep_referer:bool=False,type_:str="v1"):
+        if keep_referer==True:
+            referer={"Referer":self.session.headers["Referer"]}
+        else:
+            referer={}
+        orig_headers=self.session.headers
+        if type_=="v1":
+            # 旧版登陆，估计已经废了，仍然保留作为兼容
+            self.logger.info("使用网页OAuth登陆")
+            while True:
+                random_="".join(random.sample(string.digits+string.ascii_letters,random.randrange(20,21))) # FAJ25n9gl2mXEkGgrljtq
+                self.logger.debug("random=%s" %random_)
+                self.logger.info("正在获取二维码")
+                # fxxk腾讯！这参数的True和False得用文本，还区分大小写
+                params={"random":random_,"useSelfWxapp":"true","enableFetchPhone":"false"}
+                json_response=self.session.get("https://oauth.u.hep.com.cn/oauth/wxapp/qrcode/%s" %self.client,params=params).json()
+                self.logger.debug("response=%s" %json_response)
+                if json_response["data"]==None:
+                    self.logger.error("登陆出错")
+                    self.logger.debug(json_response["message"])
+                    self.login(type_="v0")
+                    return
+                else:
+                    if json_response["data"]["success"]==True:
+                        self.logger.error("此二维码已被使用过")
+                    else:
+                        self.logger.debug("此二维码未被使用过")
+                        break
+                time.sleep(0.5)
+            qr=json_response["data"]["qrcode"]
+            self.logger.debug("qr=%s" %qr)
+            self.session.headers.update({"Accept":"image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"})
+            self.show_qr_signal.emit(self.session.get(qr).content)
+            self.session.headers.update({"Accept":"application/json, text/plain, */*"})
+            times=0
+            while True:
+                times=times+1
+                post_data={"random":random_,"useSelfWxapp":"true"}
+                try:
+                    json_response=self.session.post("https://oauth.u.hep.com.cn/oauth/wxapp/confirm/qr",params=post_data).json()
+                except:
+                    self.logger.error("确认QR码扫描状态过程中传输数据出错，将继续")
+                else:
+                    if json_response["data"]["code"]==200:
+                        self.logger.debug("第 %d 次轮询二维码验证结果成功" %times)
+                        _id=json_response["data"]["data"]["_id"] # 5fc8400785e70a5d71bd2c44
+                        username=json_response["data"]["data"]["username"] # zhanghua
+                        self.token=json_response["data"]["data"]["token"]
+                        params={"t":str(int(time.time())),"uid":_id}
+                        json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/authorize/token/",params=params).json()
+                        self.token=json_response["token"]
+                        self.refresh_token=json_response["refresh_token"]
+                        self.logger.info("用户 %s 登陆成功" %(username))
+                        self.logger.debug("token=%s" %self.token)
+                        self.close_qr_signal.emit()
+                        break
+                    elif json_response["data"]["code"]==500:
+                        self.logger.debug("第 %d 次轮询二维码验证结果失败，继续等待" %times)
+                    time.sleep(1.0)
+                finally:
+                    self.logger.debug("response=%s" %json_response)
+        elif type_=="v2":
+            # 处于未完成状态，不要使用这个模式
+            self.logger.debug("使用模拟手机微信登陆")
+            new_headers={
+                "User-Agent":"Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2759 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/appbrand0 WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64 miniProgram",
+                "Referer":"https://ssxx.univs.cn/client/detail/%s" %self.activity_id,
+                "X-Requested-With":"com.tencent.mm",
+                "Accept-Encoding":"gzip, deflate"
+            }
+            self.session.headers.update(new_headers)
+            json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/authorize/token/",params={"t":int(time.time())}).json()
+            self.logger.debug("服务器返回数据：%s" %json_response)
+            if json_response["code"]==1102:
+                self.session.headers.update({"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/wxpic,image/tpg,image/apng,*/*;q=0.8,application/signed-exchange;v=b3"})
+                resp=self.session.get("https://oauth.u.hep.com.cn/oauth/wechatmp/url/%s" %self.client,params={"redirectUrl":"%s" %self.session.headers["Referer"]})
+                self.logger.debug("请求数据：%s,%s" %(self.session.headers,resp.url))
+                if resp.status_code!=302:
+                    self.logger.error("未触发重定向")
+                    self.logger.debug(resp.text)
+                    raise RuntimeError("服务器返回值：%d" %resp.status_code)
+                else:
+                    self.logger.debug("重定向地址：%s" %resp.url)
+                query=parse.parse_qs(parse.urlparse(parse.unquote(resp.url)).query)
+                wx_data=dict(
+                    appid=query["appid"][0],redirect_uri=query["redirect_uri"][0],response_type=query["response_type"][0],
+                    scope=query["scope"][0],state=query["state"][0],md=query["md"][0],uin=query["uin"][0],key=query["key"][0],
+                    version=query["version"][0],pass_ticket=query["pass_ticket"][0])
+                soup=BeautifulSoup(resp.text,"html.parser")
+                elements=soup.select("input[type=\"hidden\"]")
+                for element in elements:
+                    wx_data[element.attrs["name"]]=element.attrs["value"]
+                # wx_data具有以下key：uuid,uin,key,pass_ticket,version,appid,scope,state,md,response_type,redirect_uri
+                self.session.headers.update({"Referer":resp.url})
+                resp=self.session.get("https://open.weixin.qq.com/connect/oauth2/authorize_reply",params={"allow":1,"snap_userinfo":"on","uuid":wx_data["uuid"],"uin":wx_data["uin"],"key":wx_data["key"],"pass_ticket":wx_data["pass_ticket"],"version":wx_data["version"]})
+                data=json.loads(parse.parse_qs(parse.urlparse(parse.unquote(resp.url)).query)["data"][0])
+                self.session.headers.update({"Referer":resp.url})
+                json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/base/public/key/",params={"t":int(time.time())}).json()
+                self.logger.debug("OAuth内容：%s" %data["oauth"])
+                json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/authorize/token/",params={"t":int(time.time()),"uid":wx_data["uid"],"activity_id":self.activity_id,"avatar":data["oauth"]["avatarUrl"]}).json()
+            self.token=json_response["token"]
+            self.refresh_token=json_response["refresh_token"]
+        else:
+            self.logger.info("使用存储的登陆信息完成登陆")
+            self.token,self.refresh_token=self.get_token()
+        token_info=self.decode_token()
+        expire=token_info[self.token.split(".")[1]]["exp"]
+        if expire-time.time()<500:
+            self.update_token()
+        headers={
+            "Referer":"https://ssxx.univs.cn/clientLogin?redirect=/client/detail/%s" %self.activity_id,
+            "Authorization":"Bearer %s" %self.token}
+        self.session.headers.update(orig_headers)
+        self.session.headers.update(headers)
+        if keep_referer==True:
+            self.session.headers.update(referer)
+        params={"t":str(int(time.time()))}
+        json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/portal/user/",params=params).json()
+        if json_response["code"]==1002:
+            self.logger.error("Token已过期")
+            raise RuntimeError(json_response["message"])
+        self.logger.debug("获取用户信息：%s" %json_response)
+        name=json_response["data"]["name"]
+        university_name=json_response["data"]["university_name"]
+        zip_=json_response["data"]["zip"]
+        mobile=json_response["data"]["mobile"]
+        self.logger.info("用户 %s 来自 %s，手机号 %s" %(name,university_name,zip_+" "+mobile))
+        self.session.headers.update({"Referer": "https://ssxx.univs.cn/client/detail/%s" %(self.activity_id)})
     def is_enabled(self,title:str):
         for key in self.conf.keys():
-            if type(self.conf[key])==dict and self.conf[key]["title"]==title:
-                return True
+            if type(self.conf[key])==dict and "title" in self.conf[key] and "enabled" in self.conf[key] and self.conf[key]["title"]==title:
+                return bool(self.conf[key]["enabled"])
         return False
     def times(self,title:str):
         for key in self.conf.keys():
-            if type(self.conf[key])==dict and self.conf[key]["title"]==title:
+            if type(self.conf[key])==dict and "title" in self.conf[key] and "times" in self.conf[key] and self.conf[key]["title"]==title:
                 return int(self.conf[key]["times"])
+        return 1
     def start(self):
         conn=sqlite3.connect("answers.db")
         self.cur=conn.cursor()
@@ -161,6 +236,12 @@ class TestProcessor():
         self.cur.close()
         conn.close()
         self.logger.debug("已关闭数据库连接")
+        with open(file="config.json",mode="r",encoding="utf-8") as reader:
+            conf=json.loads(reader.read())
+        conf["auth"]={"token":self.token,"refresh_token":self.refresh_token}
+        with open(file="config.json",mode="w",encoding="utf-8") as writer:
+            writer.write(json.dumps(conf,sort_keys=True,indent=4,ensure_ascii=False))
+        self.logger.debug("已更新Token数据供下次使用")
     def process(self,mode_id:str,sleep:bool=True):
         headers={"Referer":"https://ssxx.univs.cn/client/exam/%s/1/1/%s" %(self.activity_id,mode_id),}
         self.session.headers.update(headers)
@@ -177,7 +258,7 @@ class TestProcessor():
         verify_pos=self.normal_choice_pos(lst=question_ids)
         for question_id in question_ids:
             if sleep==True:
-                time.sleep(random.uniform(0,5))
+                time.sleep(random.uniform(0,3))
                 # 随机休眠一段时间尝试规避速度过快导致的服务器警告
             i=question_ids.index(question_id)
             num=num+1
@@ -219,9 +300,9 @@ class TestProcessor():
         self.logger.debug("submit_code=%s" %code)
         post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":"1","code":code}
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/save/verification/code/",json=post_data).json()
+        self.logger.debug("submit_response=%s" %json_response)
         if json_response["code"]!=0:
             self.logger.error("提交验证码失败")
-            self.submit_verify(mode_id=mode_id,n=n)
         else:
             self.logger.info("提交验证码成功")
     def get_option(self,activity_id,question_id,mode_id,n:str,veryfy:bool=False):
@@ -351,9 +432,11 @@ class TestProcessor():
         elif json_response["code"]==0:
             owner=json_response["data"]["owner"]
             self.logger.info("执行完成，正确数：%d，答题用时：%d 秒" %(owner["correct_amount"],owner["consume_time"]))
-            if json_response["data"]["opponent"]!={}:
+            if json_response["data"]["opponent"]!=None and json_response["data"]["opponent"]!={}:
                 opponent=json_response["data"]["opponent"]
                 self.logger.info("处于对战模式，对方信息：来自 %s 的 %s，正确数 %d，用时 %d秒" %(opponent["univ_name"],opponent["name"],opponent["correct_amount"],opponent["consume_time"]))
+        elif json_response["code"]==4831:
+            self.logger.error("答题用时过短")
         else:
             self.logger.error("提交失败，请在调试模式下查看服务器返回数据以确定问题")
     def encrypt_with_pubkey(self,string:str,time_:int=int(time.time())):
@@ -362,7 +445,7 @@ class TestProcessor():
         pubkey=RSA.import_key(json_response["data"]["public_key"])
         cipher=Cipher.new(pubkey)
         return base64.b64encode(cipher.encrypt(string.encode())).decode()
-    def bootstrap(self,times:int=100):
+    def bootstrap(self,times:int=30):
         # 初始化题目数据库，建议使用小号
         self.logger.info("正在初始化题目数据库，强烈建议使用无关小号扫描小程序码")
         self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
@@ -370,6 +453,33 @@ class TestProcessor():
             for i in range(times):
                 self.process(mode_id=key,sleep=False)
         self.logger.info("初始化数据库成功")
+    def get_token(self):
+        with open(file="config.json",mode="r",encoding="utf-8") as reader:
+            conf=json.loads(reader.read())
+            token=conf["auth"]["token"]
+            refresh_token=conf["auth"]["refresh_token"]
+        self.logger.debug("Token=%s,refresh_token=%s" %(token,refresh_token))
+        return token,refresh_token
+    def update_token(self):
+        json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/authorize/token/refresh/").json()
+        self.logger.debug("返回数据：%s" %json_response)
+        if json_response["code"]==0:
+            self.token=json_response["token"]
+            self.session.headers.update({"Authorize":"Bearer %s" %self.token})
+            self.logger.info("更新Token成功")
+        else:
+            self.logger.error("更新Token失败,服务器返回信息：%s" %json_response["message"])
+    def decode_token(self,token:str=""):
+        # 原理来自https://github.com/deximy/FxxkSsxx
+        if token=="":
+            token=self.token
+        result=dict()
+        for part in token.split("."):
+            self.logger.debug("Token分片：%s" %part)
+            if part==token.split(".")[-1]:
+                continue
+            result[part]=json.loads(base64.b64decode(part+"==").decode())
+        return result
 class Work(QObject):
     def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal):
         super().__init__()
@@ -385,7 +495,7 @@ class Work(QObject):
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
 class BootStrap(QObject):
-    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,times:int=100):
+    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,times:int=30):
         super().__init__()
         self.logger=logging.getLogger(__name__)
         self.show_qr_signal=show_qr_signal
@@ -436,7 +546,8 @@ class SettingWindow(QDialog):
         proxy_input=EnhancedEdit()
         proxy_input.setPlaceholderText("(无)")
         proxy_input.setText(self.conf["proxy"])
-        proxy_input.setToolTip("格式为协议://IP:端口，留空保持直连")
+        proxy_input.setValidator(QRegularExpressionValidator(QRegularExpression("^(http[s]{0,1}|socks5)://(.*:.*@)?([^/:]+)(:[1-6][0-9]{0,4})?$")))
+        proxy_input.setToolTip("格式为协议://[用户名:密码@]IP:端口，留空保持直连")
         proxy_input.setStyleSheet(theme["line_edit"])
         proxy_layout.addWidget(proxy_label)
         proxy_layout.addWidget(proxy_input)
@@ -463,7 +574,31 @@ class SettingWindow(QDialog):
         theme_layout.addWidget(theme_label)
         theme_layout.addWidget(theme_choose)
         theme_group.setLayout(theme_layout)
-        for widget in [proxy,theme_group]:
+        auth=QGroupBox()
+        auth.setObjectName("auth")
+        auth.setToolTip("登陆认证信息（需要抓包）：")
+        auth.setStyleSheet(theme["group_box"])
+        auth_layout=QVBoxLayout()
+        token_label=QLabel("Token：")
+        token_label.setStyleSheet(theme["label"])
+        token_input=EnhancedEdit()
+        token_input.setStyleSheet(theme["line_edit"])
+        token_input.setToolTip("登陆所需Token")
+        token_input.setText(self.conf["auth"]["token"])
+        token_input.setObjectName("token")
+        refresh_label=QLabel("刷新Token：")
+        refresh_label.setStyleSheet(theme["label"])
+        refresh_input=EnhancedEdit()
+        refresh_input.setStyleSheet(theme["line_edit"])
+        refresh_input.setToolTip("刷新Token所需的Token")
+        refresh_input.setText(self.conf["auth"]["refresh_token"])
+        refresh_input.setObjectName("refresh_token")
+        auth_layout.addWidget(token_label)
+        auth_layout.addWidget(token_input)
+        auth_layout.addWidget(refresh_label)
+        auth_layout.addWidget(refresh_input)
+        auth.setLayout(auth_layout)
+        for widget in [proxy,theme_group,auth]:
             if y+1>=self.shape:
                 y=0
                 x=x+1
@@ -487,11 +622,17 @@ class SettingWindow(QDialog):
                 settings["debug"]=layoutitem.widget().isChecked()
             elif type(layoutitem.widget())==QGroupBox:
                 group=layoutitem.widget()
+                auth=dict()
                 for j in group.children():
-                    if group.objectName()=="proxy" and type(j)==EnhancedEdit:
+                    if group.objectName()=="auth":
+                        if type(j)==EnhancedEdit:
+                            auth.update({j.objectName():j.text().strip()})
+                        data=auth
+                    elif group.objectName()=="proxy" and type(j)==EnhancedEdit:
                         data=str(j.text())
                     elif group.objectName()=="theme" and type(j)==QComboBox:
                         data=j.currentData()
+                    
                     else:
                         if type(j)==QCheckBox:
                             enabled=j.isChecked()
@@ -507,7 +648,7 @@ class SettingWindow(QDialog):
         x=0
         y=0
         for key in conf.keys():
-            if type(conf[key])==bool or type(conf[key])==str:
+            if type(conf[key])==bool or type(conf[key])==str or key=="auth":
                 continue
             conf_title=conf[key]["title"]
             conf_enabled=conf[key]["enabled"]
@@ -526,7 +667,7 @@ class SettingWindow(QDialog):
             times_input=EnhancedEdit()
             times_input.setObjectName(key)
             times_input.setText(str(conf_times))
-            times_input.setToolTip("仅限正整数")
+            times_input.setToolTip("仅限正整数，过多的次数（>50次/项）可能导致掉登陆")
             times_input.setValidator(QRegularExpressionValidator(QRegularExpression("^[1-9][0-9]{1,8}$")))
             times_input.setStyleSheet(theme["line_edit"])
             times.addWidget(times_label)
@@ -809,6 +950,10 @@ class UI(QWidget):
             "debug":False,
             "proxy":"",
             "theme":"default",
+            "auth":{
+                "token":"",
+                "refresh_token":""
+            },
             "hero":{
                 "title":"英雄篇",
                 "enabled":True,
