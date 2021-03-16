@@ -41,6 +41,7 @@ class QLogger(logging.Handler):
 class TestProcessor():
     def __init__(self,show_qr_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal):
         self.logger=logging.getLogger(__name__)
+        self.expire=0
         with open(file="config.json",mode="r",encoding="utf-8") as conf_reader:
             self.conf=json.loads(conf_reader.read())
         self.show_qr_signal=show_qr_signal
@@ -146,6 +147,7 @@ class TestProcessor():
             if json_response["code"]==1102:
                 self.session.headers.update({"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/wxpic,image/tpg,image/apng,*/*;q=0.8,application/signed-exchange;v=b3"})
                 resp=self.session.get("https://oauth.u.hep.com.cn/oauth/wechatmp/url/%s" %self.client,params={"redirectUrl":"%s" %self.session.headers["Referer"]})
+                # 上面地址需要模拟微信浏览器环境打开，使用UA无效
                 self.logger.debug("请求数据：%s,%s" %(self.session.headers,resp.url))
                 if resp.status_code!=302:
                     self.logger.error("未触发重定向")
@@ -174,10 +176,20 @@ class TestProcessor():
             self.refresh_token=json_response["refresh_token"]
         else:
             self.logger.info("使用存储的登陆信息完成登陆")
-            self.token,self.refresh_token=self.get_token()
-        token_info=self.decode_token()
-        expire=token_info[self.token.split(".")[1]]["exp"]
-        if expire-time.time()<500:
+            self.token,self.refresh_token,self.uid=self.get_token()
+            if self.uid=="":
+                self.logger.debug("未设置UID，使用存储的Token")
+                if self.token=="":
+                    self.logger.error("Token未设置")
+                    raise RuntimeError("未设置登陆所需Token")
+            else:
+                self.logger.info("使用存储的UID完成登陆")
+                params={"t":str(int(time.time())),"uid":self.uid}
+                json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/authorize/token/",params=params).json()
+                self.token=json_response["token"]
+                self.refresh_token=json_response["refresh_token"]
+        self.expire=self.decode_token()[self.token.split(".")[1]]["exp"]
+        if self.expire-time.time()<500:
             self.update_token()
         headers={
             "Referer":"https://ssxx.univs.cn/clientLogin?redirect=/client/detail/%s" %self.activity_id,
@@ -238,7 +250,7 @@ class TestProcessor():
         self.logger.debug("已关闭数据库连接")
         with open(file="config.json",mode="r",encoding="utf-8") as reader:
             conf=json.loads(reader.read())
-        conf["auth"]={"token":self.token,"refresh_token":self.refresh_token}
+        conf["auth"]={"token":self.token,"refresh_token":self.refresh_token,"uid":self.uid}
         with open(file="config.json",mode="w",encoding="utf-8") as writer:
             writer.write(json.dumps(conf,sort_keys=True,indent=4,ensure_ascii=False))
         self.logger.debug("已更新Token数据供下次使用")
@@ -439,6 +451,8 @@ class TestProcessor():
             self.logger.error("答题用时过短")
         else:
             self.logger.error("提交失败，请在调试模式下查看服务器返回数据以确定问题")
+        if self.expire-time.time()<500:
+            self.update_token()
     def encrypt_with_pubkey(self,string:str,time_:int=int(time.time())):
         params={"t":time_}
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/base/public/key/",params=params).json()
@@ -458,8 +472,9 @@ class TestProcessor():
             conf=json.loads(reader.read())
             token=conf["auth"]["token"]
             refresh_token=conf["auth"]["refresh_token"]
-        self.logger.debug("Token=%s,refresh_token=%s" %(token,refresh_token))
-        return token,refresh_token
+            uid=conf["auth"]["uid"]
+        self.logger.debug("Token=%s,refresh_token=%s,uid=%s" %(token,refresh_token,uid))
+        return token,refresh_token,uid
     def update_token(self):
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/authorize/token/refresh/").json()
         self.logger.debug("返回数据：%s" %json_response)
@@ -467,6 +482,7 @@ class TestProcessor():
             self.token=json_response["token"]
             self.session.headers.update({"Authorize":"Bearer %s" %self.token})
             self.logger.info("更新Token成功")
+            self.expire=self.decode_token()[self.token.split(".")[1]]["exp"]
         else:
             self.logger.error("更新Token失败,服务器返回信息：%s" %json_response["message"])
     def decode_token(self,token:str=""):
@@ -477,8 +493,11 @@ class TestProcessor():
         for part in token.split("."):
             self.logger.debug("Token分片：%s" %part)
             if part==token.split(".")[-1]:
-                continue
-            result[part]=json.loads(base64.b64decode(part+"==").decode())
+                result[part]=None
+                self.logger.debug("跳过分片解码")
+            else:
+                result[part]=json.loads(base64.b64decode(part+"==").decode())
+                self.logger.debug("分片解码完成")
         return result
 class Work(QObject):
     def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal):
@@ -578,7 +597,7 @@ class SettingWindow(QDialog):
         auth.setObjectName("auth")
         auth.setToolTip("登陆认证信息（需要抓包）：")
         auth.setStyleSheet(theme["group_box"])
-        auth_layout=QVBoxLayout()
+        auth_layout=QGridLayout()
         token_label=QLabel("Token：")
         token_label.setStyleSheet(theme["label"])
         token_input=EnhancedEdit()
@@ -593,10 +612,19 @@ class SettingWindow(QDialog):
         refresh_input.setToolTip("刷新Token所需的Token")
         refresh_input.setText(self.conf["auth"]["refresh_token"])
         refresh_input.setObjectName("refresh_token")
-        auth_layout.addWidget(token_label)
-        auth_layout.addWidget(token_input)
-        auth_layout.addWidget(refresh_label)
-        auth_layout.addWidget(refresh_input)
+        uid_label=QLabel("UID：")
+        uid_label.setStyleSheet(theme["label"])
+        uid_input=EnhancedEdit()
+        uid_input.setStyleSheet(theme["line_edit"])
+        uid_input.setToolTip("微信拿到的UID")
+        uid_input.setText(self.conf["auth"]["uid"])
+        uid_input.setObjectName("uid")
+        auth_layout.addWidget(token_label,0,0)
+        auth_layout.addWidget(token_input,0,1)
+        auth_layout.addWidget(refresh_label,1,0)
+        auth_layout.addWidget(refresh_input,1,1)
+        auth_layout.addWidget(uid_label,2,0)
+        auth_layout.addWidget(uid_input,2,1)
         auth.setLayout(auth_layout)
         for widget in [proxy,theme_group,auth]:
             if y+1>=self.shape:
@@ -952,7 +980,8 @@ class UI(QWidget):
             "theme":"default",
             "auth":{
                 "token":"",
-                "refresh_token":""
+                "refresh_token":"",
+                "uid":""
             },
             "hero":{
                 "title":"英雄篇",
