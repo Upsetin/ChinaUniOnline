@@ -6,3 +6,4 @@ answers.db*
 test
 themes
 lang
+*.bak

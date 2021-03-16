@@ -17,3 +17,7 @@
 5. 回到抓包程序，这时应该有相当多的连接请求记录
 6. 在记录里面从上往下寻找一条目标地址为 <https://ssxx.univs.cn/cgi-bin/authorize/token/> 的GET请求记录，带有URL参数 t,uid,avatar,activity_id ,查看响应预览
 7. 预览应该为一个JSON文档，其中token和refresh_token为所需数据，填入程序设置界面对应位置即可。后面将想办法实现这一过程的自动化
+
+## UID获取方法
+
+在上面第 6 步的请求参数中uid参数的值就是所需的UID。有UID的情况下优先使用UID获取Token完成登陆  
