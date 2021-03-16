@@ -562,7 +562,7 @@ class SettingWindow(QDialog):
         self.setLayout(layout)
         self.setModal(True)
         self.setParent(parent)
-        self.resize(400,300)
+        self.resize(int(parent.size().width()*(600/1024)),int(parent.size().height()*(600/1024)))
         title=QLabel("设置")
         title.setStyleSheet(theme["title"])
         title.setAlignment(Qt.Alignment.AlignCenter)
