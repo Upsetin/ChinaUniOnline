@@ -5,6 +5,7 @@ import json
 import base64
 import random
 import time
+import shutil
 import string
 import logging
 import requests
@@ -19,13 +20,31 @@ from bs4 import BeautifulSoup
 os.chdir(os.path.split(os.path.realpath(__file__))[0])
 # 将工作目录转移到脚本所在目录，保证下面的相对路径都能正确找到文件
 class EnhancedEdit(QLineEdit):
-    # 一个自定义QLineEdit，可以在失去焦点时传递信号，用于更新配置
+    # 一个自定义QLineEdit，可以在失去焦点和获得焦点时时传递信号
     lostFocus=pyqtSignal()
-    def __init__(self):
+    getFocus=pyqtSignal()
+    def __init__(self,long:bool=False):
         super().__init__()
+        self.long=long
+        if self.long==True:
+            self.getFocus.connect(self.show_clear_button)
+            self.lostFocus.connect(self.disable_clear_button)
     def focusOutEvent(self, a0: QtGui.QFocusEvent) -> None:
         self.lostFocus.emit()
         return super().focusOutEvent(a0)
+    def focusInEvent(self, a0: QtGui.QFocusEvent) -> None:
+        self.getFocus.emit()
+        return super().focusInEvent(a0)
+    def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
+        super().mousePressEvent(a0)
+        if self.long==True and a0.button()==Qt.MouseButtons.LeftButton:
+            self.selectAll()
+    def show_clear_button(self):
+        if self.isClearButtonEnabled()==False:
+            self.setClearButtonEnabled(True)
+    def disable_clear_button(self):
+        if self.isClearButtonEnabled()==True:
+            self.setClearButtonEnabled(False)
 class QLogger(logging.Handler):
     # 一个自定义logging handler，用于在GUI中显示日志内容
     def __init__(self,update_signal:pyqtBoundSignal):
@@ -181,7 +200,7 @@ class TestProcessor():
                 self.logger.debug("未设置UID，使用存储的Token")
                 if self.token=="":
                     self.logger.error("Token未设置")
-                    raise RuntimeError("未设置登陆所需Token")
+                    raise RuntimeError("未设置登陆所需UID或者Token")
             else:
                 self.logger.info("使用存储的UID完成登陆")
                 params={"t":str(int(time.time())),"uid":self.uid}
@@ -257,7 +276,7 @@ class TestProcessor():
     def process(self,mode_id:str,sleep:bool=True):
         headers={"Referer":"https://ssxx.univs.cn/client/exam/%s/1/1/%s" %(self.activity_id,mode_id),}
         self.session.headers.update(headers)
-        params={"t":str(int(time.time())),"activity_id":self.activity_id,"mode_id":mode_id,"way":"1"}
+        params={"t":str(int(time.time())),"activity_id":self.activity_id,"mode_id":mode_id,"way":self.conf["way"]}
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/race/beginning/",params=params).json()
         self.logger.debug("获取题目数据：%s" %json_response)
         question_ids=json_response["question_ids"]
@@ -270,8 +289,11 @@ class TestProcessor():
         verify_pos=self.normal_choice_pos(lst=question_ids)
         for question_id in question_ids:
             if sleep==True:
-                time.sleep(random.uniform(0,3))
+                time.sleep(random.uniform(0.1,3.0))
                 # 随机休眠一段时间尝试规避速度过快导致的服务器警告
+            else:
+                time.sleep(random.uniform(0.1,0.5))
+                # 还是有几率在对决模式中出现答题过快的问题，因此加入一个更短时间的睡眠取得稳定性和获胜率的平衡
             i=question_ids.index(question_id)
             num=num+1
             if i==verify_pos:
@@ -302,7 +324,7 @@ class TestProcessor():
         timestamp=int(time_)
         code=self.encrypt_with_pubkey(string=n,time_=timestamp)
         self.logger.debug("save_code=%s" %code)
-        post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":"1","code":code}
+        post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":self.conf["way"],"code":code}
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/check/verification/code/",json=post_data).json()
         return bool(json_response["status"])
     def submit_verify(self,mode_id:str,n:str):
@@ -310,7 +332,7 @@ class TestProcessor():
         time_=time.time()
         code=self.encrypt_with_pubkey(string=n,time_=int(time_))
         self.logger.debug("submit_code=%s" %code)
-        post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":"1","code":code}
+        post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":self.conf["way"],"code":code}
         json_response=self.session.post("https://ssxx.univs.cn/cgi-bin/save/verification/code/",json=post_data).json()
         self.logger.debug("submit_response=%s" %json_response)
         if json_response["code"]!=0:
@@ -318,7 +340,7 @@ class TestProcessor():
         else:
             self.logger.info("提交验证码成功")
     def get_option(self,activity_id,question_id,mode_id,n:str,veryfy:bool=False):
-        params={"t":str(int(time.time())),"activity_id":activity_id,"question_id":question_id,"mode_id":mode_id,"way":"1"}
+        params={"t":str(int(time.time())),"activity_id":activity_id,"question_id":question_id,"mode_id":mode_id,"way":self.conf["way"]}
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/race/question/",params=params).json()
         self.logger.debug("获取选项信息：%s" %json_response)
         if veryfy==True:
@@ -394,7 +416,7 @@ class TestProcessor():
                 self.cur.execute("UPDATE '%s' SET QUESTION = '%s', ANSWER = '%s'" %(mode_id,question,answer))
                 self.logger.debug("已更新数据库条目")
     def process_ans(self,question_id:str,activity_id:str,mode_id:str,answer_ids:list,catch:bool=False):
-        data={"activity_id":activity_id,"question_id":question_id,"answer":None,"mode_id":mode_id,"way":"1"}
+        data={"activity_id":activity_id,"question_id":question_id,"answer":None,"mode_id":mode_id,"way":self.conf["way"]}
         if catch==True:
             data["answer"]=[random.choice(answer_ids)]
             prefix="catch"
@@ -461,7 +483,7 @@ class TestProcessor():
         return base64.b64encode(cipher.encrypt(string.encode())).decode()
     def bootstrap(self,times:int=30):
         # 初始化题目数据库，建议使用小号
-        self.logger.info("正在初始化题目数据库，强烈建议使用无关小号扫描小程序码")
+        self.logger.info("正在初始化题目数据库，强烈建议使用无关小号登陆")
         self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
         for key in self.ids.keys():
             for i in range(times):
@@ -555,6 +577,7 @@ class SettingWindow(QDialog):
         debug_check.setChecked(self.conf["debug"])
         debug_check.setToolTip("单击切换开关状态")
         debug_check.setStyleSheet(theme["check_box"])
+        debug_check.setObjectName("debug")
         self.content=QGridLayout()
         (x,y)=self.show_setting(conf=self.conf,layout=self.content,theme=theme)# 返回content的最后一个元素的x,y
         proxy=QGroupBox()
@@ -600,33 +623,41 @@ class SettingWindow(QDialog):
         auth_layout=QGridLayout()
         token_label=QLabel("Token：")
         token_label.setStyleSheet(theme["label"])
-        token_input=EnhancedEdit()
+        token_input=EnhancedEdit(long=True)
         token_input.setStyleSheet(theme["line_edit"])
         token_input.setToolTip("登陆所需Token")
         token_input.setText(self.conf["auth"]["token"])
         token_input.setObjectName("token")
+        token_input.home(False)
         refresh_label=QLabel("刷新Token：")
         refresh_label.setStyleSheet(theme["label"])
-        refresh_input=EnhancedEdit()
+        refresh_input=EnhancedEdit(long=True)
         refresh_input.setStyleSheet(theme["line_edit"])
         refresh_input.setToolTip("刷新Token所需的Token")
         refresh_input.setText(self.conf["auth"]["refresh_token"])
         refresh_input.setObjectName("refresh_token")
+        refresh_input.home(False)
         uid_label=QLabel("UID：")
         uid_label.setStyleSheet(theme["label"])
-        uid_input=EnhancedEdit()
+        uid_input=EnhancedEdit(long=True)
         uid_input.setStyleSheet(theme["line_edit"])
-        uid_input.setToolTip("微信拿到的UID")
+        uid_input.setToolTip("UID（优先使用作为登陆认证信息）")
         uid_input.setText(self.conf["auth"]["uid"])
         uid_input.setObjectName("uid")
-        auth_layout.addWidget(token_label,0,0)
-        auth_layout.addWidget(token_input,0,1)
-        auth_layout.addWidget(refresh_label,1,0)
-        auth_layout.addWidget(refresh_input,1,1)
-        auth_layout.addWidget(uid_label,2,0)
-        auth_layout.addWidget(uid_input,2,1)
+        uid_input.home(False)
+        auth_layout.addWidget(token_label,0,0,Qt.Alignment.AlignRight)
+        auth_layout.addWidget(token_input,0,1,Qt.Alignment.AlignLeft)
+        auth_layout.addWidget(refresh_label,1,0,Qt.Alignment.AlignRight)
+        auth_layout.addWidget(refresh_input,1,1,Qt.Alignment.AlignLeft)
+        auth_layout.addWidget(uid_label,2,0,Qt.Alignment.AlignRight)
+        auth_layout.addWidget(uid_input,2,1,Qt.Alignment.AlignLeft)
         auth.setLayout(auth_layout)
-        for widget in [proxy,theme_group,auth]:
+        way=QCheckBox("团队模式")
+        way.setChecked(bool(self.conf["way"]-1))
+        way.setToolTip("是否开启团队模式")
+        way.setStyleSheet(theme["check_box"])
+        way.setObjectName("way")
+        for widget in [proxy,theme_group,debug_check,way,auth]:
             if y+1>=self.shape:
                 y=0
                 x=x+1
@@ -634,7 +665,6 @@ class SettingWindow(QDialog):
                 y=y+1
                 x=x
             self.content.addWidget(widget,x,y)
-        self.content.addWidget(debug_check)
         layout.addLayout(self.content,1,1)
     def close_callback(self):
         self.save_settings()
@@ -646,8 +676,10 @@ class SettingWindow(QDialog):
         times=1
         for i in range(self.content.count()):
             layoutitem=self.content.itemAt(i)
-            if type(layoutitem.widget())==QCheckBox:
+            if type(layoutitem.widget())==QCheckBox and layoutitem.widget().objectName()=="debug":
                 settings["debug"]=layoutitem.widget().isChecked()
+            elif type(layoutitem.widget())==QCheckBox and layoutitem.widget().objectName()=="way":
+                settings["way"]=int(layoutitem.widget().isChecked())+1
             elif type(layoutitem.widget())==QGroupBox:
                 group=layoutitem.widget()
                 auth=dict()
@@ -676,7 +708,7 @@ class SettingWindow(QDialog):
         x=0
         y=0
         for key in conf.keys():
-            if type(conf[key])==bool or type(conf[key])==str or key=="auth":
+            if type(conf[key])==bool or type(conf[key])==str or key=="auth" or type(conf[key])==int:
                 continue
             conf_title=conf[key]["title"]
             conf_enabled=conf[key]["enabled"]
@@ -821,6 +853,47 @@ class UI(QWidget):
         handler.setLevel(logging.INFO)
         filehandler.setLevel(logging.INFO)
         self.logger.setLevel(logging.INFO)
+        self.default_conf={
+            "debug":False,
+            "proxy":"",
+            "theme":"default",
+            "way":1,
+            "auth":{
+                "token":"",
+                "refresh_token":"",
+                "uid":""
+            },
+            "hero":{
+                "title":"英雄篇",
+                "enabled":True,
+                "times":1
+                },
+            "revival":{
+                "title":"复兴篇",
+                "enabled":True,
+                "times":1
+            },
+            "creation":{
+                "title":"创新篇",
+                "enabled":True,
+                "times":1
+            },
+            "belief":{
+                "title":"信念篇",
+                "enabled":True,
+                "times":1
+            },
+            "limit_time":{
+                "title":"限时赛",
+                "enabled":True,
+                "times":1
+            },
+            "rob":{
+                "title":"抢十赛",
+                "enabled":True,
+                "times":1
+            }
+        }
         if os.path.exists("config.json")==False:
             self.gen_conf()
         with open(file="config.json",mode="r",encoding="utf-8") as conf_reader:
@@ -909,6 +982,8 @@ class UI(QWidget):
         handler.widget.textChanged.connect(handler.scroll_widget_to_bottom)
         self.show_qr_signal.connect(self.show_qr)
         self.logger.debug("当前调试状态：%s，使用样式：%s，完成UI初始化" %(debug,self.theme.name))
+        self.logger.debug("正在尝试更新旧版配置")
+        self.update_conf(conf=conf)
     def bootstrap(self):
         bootstrap_thread=QThread()
         bootstrap=BootStrap(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal)
@@ -973,49 +1048,31 @@ class UI(QWidget):
         setting=SettingWindow(parent=self,theme=self.theme.setting)
         setting.setStyleSheet(self.theme.setting_window)
         setting.show()
+    def update_conf(self,conf:dict,new_conf:dict=None,write:bool=True):
+        need_update=False
+        if new_conf==None:
+            new_conf=self.default_conf
+        for key in new_conf.keys():
+            self.logger.debug("正在比较键值 %s" %key)
+            if key in conf:
+                self.logger.debug("无需更新键值 %s 的数据" %key)
+            else:
+                need_update=True
+                self.logger.debug("正在将 %s 的默认值应用到旧版数据上" %key)
+                if type(new_conf[key])!=dict:
+                    conf[key]=new_conf[key]
+                else:
+                    self.update_conf(conf=conf[key],new_conf=new_conf[key],write=False)
+        self.logger.debug("更新后的配置：%s" %conf)
+        if write==True and need_update==True:
+            self.logger.info("旧版配置已备份为 config.json.bak")
+            shutil.copy("config.json","config.json.bak")
+            self.logger.debug("正在更新配置文件")
+            with open(file="config.json",mode="w",encoding="utf-8") as writer:
+                writer.write(json.dumps(conf,ensure_ascii=False,sort_keys=True,indent=4))
     def gen_conf(self):
-        default_conf={
-            "debug":False,
-            "proxy":"",
-            "theme":"default",
-            "auth":{
-                "token":"",
-                "refresh_token":"",
-                "uid":""
-            },
-            "hero":{
-                "title":"英雄篇",
-                "enabled":True,
-                "times":1
-                },
-            "revival":{
-                "title":"复兴篇",
-                "enabled":True,
-                "times":1
-            },
-            "creation":{
-                "title":"创新篇",
-                "enabled":True,
-                "times":1
-            },
-            "belief":{
-                "title":"信念篇",
-                "enabled":True,
-                "times":1
-            },
-            "limit_time":{
-                "title":"限时赛",
-                "enabled":True,
-                "times":1
-            },
-            "rob":{
-                "title":"抢十赛",
-                "enabled":True,
-                "times":1
-            }
-        }
         with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
-            conf_writer.write(json.dumps(default_conf,indent=4,sort_keys=True,ensure_ascii=False))
+            conf_writer.write(json.dumps(self.default_conf,indent=4,sort_keys=True,ensure_ascii=False))
         self.logger.info("已生成默认配置文件")
     def mousePressEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标按压事件")
