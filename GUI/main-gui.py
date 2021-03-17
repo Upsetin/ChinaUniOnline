@@ -1080,6 +1080,8 @@ class UI(QWidget):
         mins,secs=divmod(passed_time,60)
         hours,mins=divmod(mins,60)
         self.logger.info("执行完成，共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)))
+        if self.isVisible()==False:
+            self.tray.showMessage("ChinaUniOnline:任务执行完成","共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)),QSystemTrayIcon.MessageIcon.Information)
     def show_qr(self,qr:bytes):
         title_label=QLabel("请使用微信扫描小程序码完成登陆")
         title_label.setStyleSheet(self.theme.qr_title)
