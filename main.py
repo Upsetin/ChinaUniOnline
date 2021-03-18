@@ -450,17 +450,26 @@ token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE2MTU4MjU3ODgsImlhdCI6MT
 
 loginInfo = input('请输入uid或者token「不含Bearer，即后面那一串内容.」\n输入完成后回车:')
 
+judge = True
+
 if len(loginInfo) > 200:
     print('已更新token,正在获取信息...')
     token = loginInfo
 else:
     uid = loginInfo
     print('正在获取token，请稍后...')
-    token = GetToken(uid=uid)
+    try:
+        token = GetToken(uid=uid)
+    except:
+        judge = False
+        print('uid输入有误或网络问题...')
     print('token已更新...')
 
-
-info = GetInfo()['data']
+try:
+    info = GetInfo()['data']
+except:
+    judge = False
+    print('输入token有误或登录已过期...')
 print('欢迎你，来自%s的%s,当前积分:%s'%(info['university_name'],info['name'],info['integral']))
 EndNum = int(input("暂只适配英雄篇,请输入的刷题次数 (55次稳上1000分,积分更新有延迟，不用担心!): "))
 num = 0
