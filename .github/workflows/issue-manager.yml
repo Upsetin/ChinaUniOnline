@@ -19,7 +19,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           config: >
-{
+'{
     "$schema": "https://raw.fastgit.org/tiangolo/issue-manager/master/schema.json",
     "answered": {
         "users": [
@@ -51,4 +51,4 @@ jobs:
         "remove_label_on_comment": true,
         "remove_label_on_close": true
     }
-}
+}'
