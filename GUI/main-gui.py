@@ -211,8 +211,6 @@ class TestProcessor():
                 self.token=json_response["token"]
                 self.refresh_token=json_response["refresh_token"]
         self.expire=self.decode_token()[self.token.split(".")[1]]["exp"]
-        if self.expire-time.time()<500:
-            self.update_token()
         headers={
             "Referer":"https://ssxx.univs.cn/clientLogin?redirect=/client/detail/%s" %self.activity_id,
             "Authorization":"Bearer %s" %self.token}
@@ -220,6 +218,8 @@ class TestProcessor():
         self.session.headers.update(headers)
         if keep_referer==True:
             self.session.headers.update(referer)
+        if self.expire-time.time()<500:
+            self.update_token()
         params={"t":str(int(time.time()))}
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/portal/user/",params=params).json()
         if json_response["code"]==1002:
@@ -248,40 +248,50 @@ class TestProcessor():
         self.logger.debug("已启动数据库连接")
         whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
         # 不应该休眠的模式的白名单列表
-        for key in self.ids.keys():
-            title=self.ids[key]["title"]
-            enabled=self.ids[key]["enabled"]
-            times=self.ids[key]["times"]
-            if key in whitelist_mode:
-                sleepflag=False
-                self.logger.debug("key=%s 关闭答题睡眠" %key)
-            else:
-                sleepflag=True
-                self.logger.debug("key=%s 启用答题睡眠" %key)
-            if enabled==True:
-                for i in range(times):
-                    self.logger.info("正在处理第 %d 次的 %s" %(i+1,title))
-                    self.process(mode_id=key,sleep=sleepflag)
-            else:
-                self.logger.info("%s 已跳过" %title)
-        self.session.close()
-        self.logger.debug("已关闭Session")
-        conn.commit()
-        self.cur.close()
-        conn.close()
-        self.logger.debug("已关闭数据库连接")
-        with open(file="config.json",mode="r",encoding="utf-8") as reader:
-            conf=json.loads(reader.read())
-        conf["auth"]={"token":self.token,"refresh_token":self.refresh_token,"uid":self.uid}
-        with open(file="config.json",mode="w",encoding="utf-8") as writer:
-            writer.write(json.dumps(conf,sort_keys=True,indent=4,ensure_ascii=False))
-        self.logger.debug("已更新Token数据供下次使用")
+        try:
+            for key in self.ids.keys():
+                title=self.ids[key]["title"]
+                enabled=self.ids[key]["enabled"]
+                times=self.ids[key]["times"]
+                if key in whitelist_mode:
+                    sleepflag=False
+                    self.logger.debug("key=%s 关闭答题睡眠" %key)
+                else:
+                    sleepflag=True
+                    self.logger.debug("key=%s 启用答题睡眠" %key)
+                if enabled==True:
+                    for i in range(times):
+                        self.logger.info("正在处理第 %d 次的 %s" %(i+1,title))
+                        self.process(mode_id=key,sleep=sleepflag)
+                else:
+                    self.logger.info("%s 已跳过" %title)
+        except RuntimeError as e:
+            self.logger.error("处理过程中出现错误")
+            self.logger.debug("错误详细内容：%s" %e)
+        else:
+            self.logger.info("所有任务均正常完成")
+        finally:
+            self.session.close()
+            self.logger.debug("已关闭Session")
+            conn.commit()
+            self.cur.close()
+            conn.close()
+            self.logger.debug("已关闭数据库连接")
+            with open(file="config.json",mode="r",encoding="utf-8") as reader:
+                conf=json.loads(reader.read())
+            conf["auth"]={"token":self.token,"refresh_token":self.refresh_token,"uid":self.uid}
+            with open(file="config.json",mode="w",encoding="utf-8") as writer:
+                writer.write(json.dumps(conf,sort_keys=True,indent=4,ensure_ascii=False))
+            self.logger.debug("已更新Token数据供下次使用")
     def process(self,mode_id:str,sleep:bool=True):
         headers={"Referer":"https://ssxx.univs.cn/client/exam/%s/1/1/%s" %(self.activity_id,mode_id),}
         self.session.headers.update(headers)
         params={"t":str(int(time.time())),"activity_id":self.activity_id,"mode_id":mode_id,"way":self.conf["way"]}
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/race/beginning/",params=params).json()
         self.logger.debug("获取题目数据：%s" %json_response)
+        if json_response["code"]!=0:
+            self.logger.error("服务器返回错误代码：%d，错误信息：%s" %(json_response["code"],json_response["message"]))
+            raise RuntimeError("服务器返回数据有误，查看日志获得更多信息")
         question_ids=json_response["question_ids"]
         num=0
         SuccessNum=0
@@ -345,6 +355,9 @@ class TestProcessor():
     def get_option(self,activity_id,question_id,mode_id,n:str,veryfy:bool=False):
         params={"t":str(int(time.time())),"activity_id":activity_id,"question_id":question_id,"mode_id":mode_id,"way":self.conf["way"]}
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/race/question/",params=params).json()
+        if json_response["code"]!=0:
+            self.logger.error("服务器返回错误代码：%d，信息：%s" %(json_response["code"],json_response["message"]))
+            raise RuntimeError("服务器返回数据有误，查看日志文件获得更多信息")
         self.logger.debug("获取选项信息：%s" %json_response)
         if veryfy==True:
             #根据抓包结果，先获取了问题，再进行的验证码处理
@@ -433,6 +446,9 @@ class TestProcessor():
             return json_response["data"]["correct_ids"]
         elif json_response["code"]==0 and catch==False:
             return json_response["data"]["correct"]
+        elif json_response["code"]!=0:
+            self.logger.error("服务器返回错误代码：%d，信息：%s" %(json_response["code"],json_response["message"]))
+            raise RuntimeError("服务器返回数据有误，查看日志获得更多信息")
     def clean_element(self,string_:str):
         # 清除元素中不显示（contains(@style,display:none)）的部分以获得正常的题目和选项
         # 使用 BeautifilSoup解析
@@ -476,6 +492,7 @@ class TestProcessor():
             self.logger.error("答题用时过短")
         else:
             self.logger.error("提交失败，请在调试模式下查看服务器返回数据以确定问题")
+            raise RuntimeError("服务器返回数据有误，查看日志获得更多信息")
         if self.expire-time.time()<500:
             self.update_token()
     def encrypt_with_pubkey(self,string:str,time_:int=int(time.time())):
