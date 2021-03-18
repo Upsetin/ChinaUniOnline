@@ -445,8 +445,6 @@ def SubmitVerification():
         # raise MyError(result["code"], "提交验证码失败：" + str(result))
     # return result["status"]
 
-token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE2MTU4MjU3ODgsImlhdCI6MTYxNTgxNDk4OCwiaXNzIjoiSEVQRTM6QVVUSCIsIm5iZiI6MTYxNTgxNDk4OCwidWlkIjoiNjAxOTQyNjhkMGI2MGI1Nzg4MWU5MjJjIiwibmFtZSI6Ilx1N2M3M1x1OWE2Y1x1Njc5NyIsImNvZGUiOiI2MDE5NDI2OGQwYjYwYjU3ODgxZTkyMmMiLCJpc19wZXJmZWN0Ijp0cnVlfQ.7ehyVRuorstSzZBzAE7Imdgoa_gVmDAS31Wj90l24eI'
-
 
 loginInfo = input('请输入uid或者token「不含Bearer，即后面那一串内容.」\n输入完成后回车:')
 
