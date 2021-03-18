@@ -380,7 +380,8 @@ def GetToken(uid='6018e5d37fc77f3d90194078'):
     a = requests.get(url=url)
     global token
     token = a.json()['token']
-    print(token)
+    # print(token)
+    return token
 
 
 #检查验证信息
@@ -445,6 +446,8 @@ def SubmitVerification():
         # raise MyError(result["code"], "提交验证码失败：" + str(result))
     # return result["status"]
 
+# token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE2MTU4MjU3ODgsImlhdCI6MTYxNTgxNDk4OCwiaXNzIjoiSEVQRTM6QVVUSCIsIm5iZiI6MTYxNTgxNDk4OCwidWlkIjoiNjAxOTQyNjhkMGI2MGI1Nzg4MWU5MjJjIiwibmFtZSI6Ilx1N2M3M1x1OWE2Y1x1Njc5NyIsImNvZGUiOiI2MDE5NDI2OGQwYjYwYjU3ODgxZTkyMmMiLCJpc19wZXJmZWN0Ijp0cnVlfQ.7ehyVRuorstSzZBzAE7Imdgoa_gVmDAS31Wj90l24eI'
+
 
 loginInfo = input('请输入uid或者token「不含Bearer，即后面那一串内容.」\n输入完成后回车:')
 
@@ -462,21 +465,24 @@ else:
         judge = False
         print('uid输入有误或网络问题...')
     print('token已更新...')
-
+info = GetInfo()
 try:
     info = GetInfo()['data']
 except:
     judge = False
     print('输入token有误或登录已过期...')
-print('欢迎你，来自%s的%s,当前积分:%s'%(info['university_name'],info['name'],info['integral']))
-EndNum = int(input("暂只适配英雄篇,请输入的刷题次数 (55次稳上1000分,积分更新有延迟，不用担心!): "))
-num = 0
-while num < EndNum:
-    info = GetInfo()['data']
-    print('\n当前积分:',info['integral'])
-    num += 1
-    print('\n英雄篇-正在第%s次刷题～'%(num))
-    GetQuestions()
+if judge:
 
-info = GetInfo()['data']
-print('\n感谢使用!来自%s的%s,当前积分:%s'%(info['university_name'],info['name'],info['integral']))
+    print('欢迎你，来自%s的%s,当前积分:%s'%(info['university_name'],info['name'],info['integral']))
+    EndNum = int(input("暂只适配英雄篇,请输入的刷题次数 (55次稳上1000分,积分更新有延迟，不用担心!): "))
+    num = 0
+    while num < EndNum:
+        info = GetInfo()['data']
+        print('\n当前积分:',info['integral'])
+        num += 1
+        print('\n英雄篇-正在第%s次刷题～'%(num))
+        GetQuestions()
+
+    info = GetInfo()['data']
+    print('\n感谢使用!来自%s的%s,当前积分:%s'%(info['university_name'],info['name'],info['integral']))
+input('感谢使用，回车退出程序:)')
