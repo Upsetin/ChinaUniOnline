@@ -1,0 +1,54 @@
+﻿name: Issue Manager
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  issue_comment:
+    types:
+      - created
+      - edited
+  issues:
+    types:
+      - labeled
+
+jobs:
+  issue-manager:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: tiangolo/issue-manager@0.3.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config: >
+            {
+                "$schema": "https://raw.fastgit.org/tiangolo/issue-manager/master/schema.json",
+                "answered": {
+                    "users": [
+                        "zhanghua000",
+                        "Upsetin"
+                    ],
+                    "delay": "P3DT12H30M5S",
+                    "message": "这个Issue已回答，我们将关闭它。",
+                    "remove_label_on_comment": false,
+                    "remove_label_on_close": false
+                },
+                "validated": {
+                    "users": [
+                        "zhanghua000",
+                        "Upsetin"
+                    ],
+                    "delay": 300,
+                    "message": "这个Issue在5分钟内未确认有效性，我们将关闭它。",
+                    "remove_label_on_comment": true,
+                    "remove_label_on_close": false
+                },
+                "waiting": {
+                    "users": [
+                        "zhanghua000",
+                        "Upsetin"
+                    ],
+                    "delay": 691200,
+                    "message": "等待额外信息超过8天，我们将关闭它。",
+                    "remove_label_on_comment": true,
+                    "remove_label_on_close": true
+                }
+            }
