@@ -22,9 +22,9 @@
 + 无Python环境
   下载可执行文件，将题库.csv与main.exe置于同一文件夹，直接运行即可.
   
-###关于uid或token的获取  
-####1.可参考GUI文件内，[@zhanghua000](http:\/\/github.com\/zhanghua000)推荐的方  
-####2.也可在电脑登录最新版微信，将答题页面分享给文件助手，电脑打开该页面并登录，使用抓包软件获取请求header里的token
+### 关于uid或token的获取  
+#### 1.可参考GUI文件内，[@zhanghua000](http:\/\/github.com\/zhanghua000)推荐的方  
+#### 2.也可在电脑登录最新版微信，将答题页面分享给文件助手，电脑打开该页面并登录，使用抓包软件获取请求header里的token
 
 # 该项目蓝奏云下载地址( 3.18 已更新 ) [https://wws.lanzous.com/ihwy6n2a01g](https://wws.lanzous.com/ihwy6n2a01g) 密码:coot
 ### 📧 联系邮箱
