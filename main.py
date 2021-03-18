@@ -6,11 +6,12 @@ Author:
 GitHub项目地址:
     https://github.com/Upsetin/ChinaUniOnline
 更新日期:
-    2021-02-09
+    2021-03-18
 '''
 
 import requests,csv,re,json,random,time
 
+#获取个人信息
 def GetInfo():
     import requests
 
@@ -37,6 +38,7 @@ def GetInfo():
     return response.json()
 
 
+#获取登录二维码 -已失效
 def ViewQR(url=''):
     html = requests.get(url)
     with open('QR.png', 'wb') as file:
@@ -57,6 +59,7 @@ def ViewQR(url=''):
         os.startfile(fileDir)
 
 
+#读取题库
 def ReadFile():
     with open("题库.csv", "r",encoding='UTF-8') as f:
         reader = csv.reader(f)
@@ -66,6 +69,7 @@ def ReadFile():
     return db
 
 
+#写入题库
 def IntoFile(FileNmae = '题库.csv',Data=[]):
     file = open(FileNmae, 'a', encoding='utf-8')
     f = csv.writer(file)
@@ -76,6 +80,7 @@ def IntoFile(FileNmae = '题库.csv',Data=[]):
     file.close()
 
 
+#获取题目
 def GetQuestions(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a8c3ba51d5'):
 
     url = "https://ssxx.univs.cn/cgi-bin/race/beginning/?t=1612247769&activity_id=%s&mode_id=%s&way=1"%(activity_id,mode_id)
@@ -120,6 +125,7 @@ def GetQuestions(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a
     print('此次成功查询%s个题，收录%s个题'%(SucessNum,FailNum))
 
 
+#获取选项
 def GetOption(activity_id='5f71e934bcdbf3a8c3ba5061',question_id='5f17ef305d6fe02504ba5e17',mode_id='5f71e934bcdbf3a8c3ba51d5'):
 
     url = "https://ssxx.univs.cn/cgi-bin/race/question/?t=1612247250&activity_id=%s&question_id=%s&mode_id=%s&way=1"%(activity_id,question_id,mode_id)
@@ -204,6 +210,7 @@ def GetOption(activity_id='5f71e934bcdbf3a8c3ba5061',question_id='5f17ef305d6fe0
         print('已存在题库中: ',title[0],TrueResult)
 
 
+#从题库中搜素答案
 def SreachResult(question_id='5f17ef305d6fe02504ba5e17',answer='5f75fe348e6c9f85d1b6072a',activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a8c3ba51d5'):
 
     url = "https://ssxx.univs.cn/cgi-bin/race/answer/"
@@ -233,6 +240,7 @@ def SreachResult(question_id='5f17ef305d6fe02504ba5e17',answer='5f75fe348e6c9f85
     return response.json()['data']['correct_ids']
 
 
+#提交题目选项
 def Confire(question_id='5f17ef305d6fe02504ba5e17',answer=['5f75fe348e6c9f85d1b6072a'],activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a8c3ba51d5'):
 
     url = "https://ssxx.univs.cn/cgi-bin/race/answer/"
@@ -265,6 +273,7 @@ def Confire(question_id='5f17ef305d6fe02504ba5e17',answer=['5f75fe348e6c9f85d1b6
     return response.json()['data']['correct_ids']
 
 
+#提交整个试题
 def Finsh(race_code='6018f697224c6a1526204144'):
 
     url = "https://ssxx.univs.cn/cgi-bin/race/finish/"
@@ -300,6 +309,7 @@ def Finsh(race_code='6018f697224c6a1526204144'):
         print(response.json())
 
 
+#PK10 -已废弃，暂不更新
 def PK10(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a8c3ba51da'):
     import requests
 
@@ -340,6 +350,7 @@ def PK10(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a8c3ba51d
     print('此次成功查询%s个题，收录%s个题' % (SucessNum, FailNum))
 
 
+#登录函数 -已失效
 def Login():
     print('正在获取登陆二维码...')
     Random = ''.join(random.sample('qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890',random.randrange(5,10)))
@@ -362,6 +373,8 @@ def Login():
         print('\r',end='')
         TimeNum += 1
 
+
+#获取token
 def GetToken(uid='6018e5d37fc77f3d90194078'):
     url = 'https://ssxx.univs.cn/cgi-bin/authorize/token/?t=1612276118&uid=%s'%(uid)
     a = requests.get(url=url)
@@ -370,6 +383,7 @@ def GetToken(uid='6018e5d37fc77f3d90194078'):
     print(token)
 
 
+#检查验证信息
 def CheckVerification():
     headers = {
         'authority': 'ssxx.univs.cn',
@@ -399,6 +413,7 @@ def CheckVerification():
     return result["status"]
 
 
+#提交验证
 def SubmitVerification():
     headers = {
         'authority': 'ssxx.univs.cn',
@@ -430,13 +445,20 @@ def SubmitVerification():
         # raise MyError(result["code"], "提交验证码失败：" + str(result))
     # return result["status"]
 
-token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE2MTI4NjcxMjcsImlhdCI6MTYxMjg1NjMyNywiaXNzIjoiSEVQRTM6QVVUSCIsIm5iZiI6MTYxMjg1NjMyNywidWlkIjoiNjAxOGUyMDBhMjNhOGM5ZTc3NmFmZWMxIiwibmFtZSI6Ilx1NzM4Ylx1ODY3OVx1Njc3MCIsImNvZGUiOiI2MDE4ZTIwMGEyM2E4YzllNzc2YWZlYzEiLCJpc19wZXJmZWN0Ijp0cnVlfQ.gJI-5Pn8VTBEtAheACGAkvs8srBRv3kp6lcXzjvoylI'
-Login()
+token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE2MTU4MjU3ODgsImlhdCI6MTYxNTgxNDk4OCwiaXNzIjoiSEVQRTM6QVVUSCIsIm5iZiI6MTYxNTgxNDk4OCwidWlkIjoiNjAxOTQyNjhkMGI2MGI1Nzg4MWU5MjJjIiwibmFtZSI6Ilx1N2M3M1x1OWE2Y1x1Njc5NyIsImNvZGUiOiI2MDE5NDI2OGQwYjYwYjU3ODgxZTkyMmMiLCJpc19wZXJmZWN0Ijp0cnVlfQ.7ehyVRuorstSzZBzAE7Imdgoa_gVmDAS31Wj90l24eI'
 
-# CheckVerification()
-# SubmitVerification()
 
-# PK10()
+loginInfo = input('请输入uid或者token「不含Bearer，即后面那一串内容.」\n输入完成后回车:')
+
+if len(loginInfo) > 200:
+    print('已更新token,正在获取信息...')
+    token = loginInfo
+else:
+    uid = loginInfo
+    print('正在获取token，请稍后...')
+    token = GetToken(uid=uid)
+    print('token已更新...')
+
 
 info = GetInfo()['data']
 print('欢迎你，来自%s的%s,当前积分:%s'%(info['university_name'],info['name'],info['integral']))
