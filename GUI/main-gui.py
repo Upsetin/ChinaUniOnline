@@ -291,7 +291,7 @@ class TestProcessor():
         self.logger.debug("获取题目数据：%s" %json_response)
         if json_response["code"]!=0:
             self.logger.error("服务器返回错误代码：%d，错误信息：%s" %(json_response["code"],json_response["message"]))
-            raise RuntimeError("服务器返回数据有误，查看日志获得更多信息")
+            raise RuntimeError("开始答题过程中服务器返回数据有误，查看日志获得更多信息")
         question_ids=json_response["question_ids"]
         num=0
         SuccessNum=0
@@ -357,7 +357,7 @@ class TestProcessor():
         json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/race/question/",params=params).json()
         if json_response["code"]!=0:
             self.logger.error("服务器返回错误代码：%d，信息：%s" %(json_response["code"],json_response["message"]))
-            raise RuntimeError("服务器返回数据有误，查看日志文件获得更多信息")
+            raise RuntimeError("获取题目过程中服务器返回数据有误，查看日志文件获得更多信息")
         self.logger.debug("获取选项信息：%s" %json_response)
         if veryfy==True:
             #根据抓包结果，先获取了问题，再进行的验证码处理
@@ -448,7 +448,7 @@ class TestProcessor():
             return json_response["data"]["correct"]
         elif json_response["code"]!=0:
             self.logger.error("服务器返回错误代码：%d，信息：%s" %(json_response["code"],json_response["message"]))
-            raise RuntimeError("服务器返回数据有误，查看日志获得更多信息")
+            raise RuntimeError("答题过程中服务器返回数据有误，查看日志获得更多信息")
     def clean_element(self,string_:str):
         # 清除元素中不显示（contains(@style,display:none)）的部分以获得正常的题目和选项
         # 使用 BeautifilSoup解析
@@ -492,7 +492,7 @@ class TestProcessor():
             self.logger.error("答题用时过短")
         else:
             self.logger.error("提交失败，请在调试模式下查看服务器返回数据以确定问题")
-            raise RuntimeError("服务器返回数据有误，查看日志获得更多信息")
+            raise RuntimeError("提交结果过程中服务器返回数据有误，查看日志获得更多信息")
         if self.expire-time.time()<500:
             self.update_token()
     def encrypt_with_pubkey(self,string:str,time_:int=int(time.time())):
