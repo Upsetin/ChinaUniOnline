@@ -21,5 +21,5 @@
 ## UID获取方法
 
 方法1：在上面第 6 步的请求参数中uid参数的值就是所需的UID。有UID的情况下优先使用UID获取Token完成登陆  
-方法2：找到 <https://ssxx.univs.cn/cgi-bin/portal/user/> 的GET记录，带有参数t，响应预览的data下的id的值也是UID
+方法2：找到 <https://ssxx.univs.cn/cgi-bin/portal/user/> 的GET记录，带有参数t，响应预览的data下的id的值也是UID  
 上面的方法选择一个即可
