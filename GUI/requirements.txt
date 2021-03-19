@@ -1,4 +1,7 @@
+requests
 requests[socks]
+matplotlib
+numpy
 beautifulsoup4
 pycryptodome
 PyQt6
