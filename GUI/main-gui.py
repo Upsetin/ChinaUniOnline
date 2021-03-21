@@ -212,7 +212,7 @@ class TestProcessor():
                 post_data={"random":random_,"useSelfWxapp":"true"}
                 try:
                     json_response=self.session.post("https://oauth.u.hep.com.cn/oauth/wxapp/confirm/qr",params=post_data).json()
-                except:
+                except requests.exceptions.RequestException:
                     self.logger.error("确认QR码扫描状态过程中传输数据出错，将继续")
                 else:
                     if json_response["data"]["code"]==200:
@@ -674,7 +674,7 @@ class TestProcessor():
             self.logger.debug("Token分片：%s" %part)
             try:
                 result[part]=json.loads(base64.b64decode(part+"==").decode())
-            except:
+            except Exception:
                 result[part]=None
                 self.logger.debug("跳过分片解码")
             else:
@@ -1253,6 +1253,7 @@ class UI(QMainWindow):
         plt.title("用户正确率分布",fontproperties=self.font_prop)
         fig.savefig(buffer)
         data_bytes=buffer.getvalue()
+        plt.close(fig)
         buffer.close()
         return data_bytes
     def tray_func(self,reason:QSystemTrayIcon.ActivationReason):
