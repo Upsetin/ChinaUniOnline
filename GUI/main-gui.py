@@ -875,6 +875,7 @@ class SettingWindow(QDialog):
                             times=int(j.text())
                         data={"title":group.title(),"enabled":enabled,"times":times}
                     settings[group.objectName()]=data
+        settings.update({"font_prop":self.conf["font_prop"]})
         self.logger.debug("设置数据：%s" %settings)
         with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
             conf_writer.write(json.dumps(settings,ensure_ascii=False,sort_keys=True,indent=4))
