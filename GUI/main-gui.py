@@ -1,4 +1,5 @@
 import os
+import io
 import sys
 import sqlite3
 import json
@@ -10,18 +11,94 @@ import string
 import logging
 import requests
 import ctypes
+import numpy
+from matplotlib import pyplot as plt 
 from urllib import parse
 from PyQt6 import QtGui
 from PyQt6.QtGui import QAction, QIcon, QMouseEvent, QPixmap, QRegularExpressionValidator
 from PyQt6.QtCore import QObject, QRegularExpression, QThread, Qt, pyqtBoundSignal, pyqtSignal
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5 as Cipher
-from PyQt6.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QMenu, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget, QSystemTrayIcon
+from PyQt6.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QMenu, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget, QSystemTrayIcon, QDockWidget, QMainWindow
 from bs4 import BeautifulSoup
 os.chdir(os.path.split(os.path.realpath(__file__))[0])
 # 将工作目录转移到脚本所在目录，保证下面的相对路径都能正确找到文件
 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ChinaUniOnlineGUI")
 # 让任务栏图标可以正常显示
+class EnhancedLabel(QLabel):
+    # 一个可以在被单击时发送信号的标签
+    clicked=pyqtSignal()
+    def __init__(self,parent:QWidget):
+        super().__init__()
+        self.setParent(parent)
+    def close(self):
+        super().close()
+    def mousePressEvent(self,event:QMouseEvent):
+        super().mousePressEvent(event)
+        self.clicked.emit()
+    def mouseReleaseEvent(self,event:QMouseEvent):
+        super().mouseReleaseEvent(event)
+        self.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
+    def mouseMoveEvent(self,event:QMouseEvent):
+        super().mouseMoveEvent(event)
+
+class UserAvatar(QWidget):
+    # 用户信息
+    def __init__(self,parent:QWidget,name:str,phone:str,score:int,times:int,t_score:int,t_times:int,school:str,province_name:str,avatar:bytes=None):
+        super().__init__()
+        self.parent_=parent
+        layout_=QVBoxLayout()
+        self.setLayout(layout_)
+        self.avatar_label=EnhancedLabel(parent=self)
+        self.avatar_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.avatar_label.setToolTip("正确率分布的雷达图，单击可放大")
+        self.avatar_label.clicked.connect(self.resize_avatar)
+        if avatar!=None:
+            self.pixmap=QPixmap()
+            self.pixmap.loadFromData(avatar)
+            pixmap=self.pixmap.scaled(200, 150, Qt.AspectRatioMode.KeepAspectRatio)
+            self.avatar_label.setPixmap(pixmap)
+        info=QVBoxLayout()
+        info.setSpacing(0)
+        self.name_label=QLabel("姓名：%s" %name)
+        self.name_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.province_label=QLabel("来自：%s" %province_name)
+        self.province_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.phone_label=QLabel("电话：%s" %phone)
+        self.phone_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.score_label=QLabel("分数：%d\n团队得分：%d" %(score,t_score))
+        self.score_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.school_label=QLabel("学校：%s" %school)
+        self.school_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.times_label=QLabel("答题次数:%d\n团队答题次数：%d" %(times,t_times))
+        self.times_label.setAlignment(Qt.Alignment.AlignCenter)
+        info.addWidget(self.name_label)
+        info.addWidget(self.province_label)
+        info.addWidget(self.phone_label)
+        info.addWidget(self.score_label)
+        info.addWidget(self.school_label)
+        info.addWidget(self.times_label)
+        layout_.addLayout(info,3)
+        layout_.addWidget(self.avatar_label,7)
+        self.setParent(self.parent_)
+    def update_score(self,score:int,t_score:int):
+        self.score_label.setText("分数：%d\n团队得分：%d" %(score,t_score))
+    def update_times(self,times:int,t_times:int):
+        self.times_label.setText("答题次数：%d\n团队答题次数：%d" %(times,t_times))
+    def update_avatar(self,avatar:bytes):
+        self.pixmap=QPixmap()
+        self.pixmap.loadFromData(avatar)
+        pixmap=self.pixmap.scaled(200, 150, Qt.AspectRatioMode.KeepAspectRatio)
+        self.avatar_label.setPixmap(pixmap)
+    def resize_avatar(self):
+        large_avatar=EnhancedLabel(parent=self.parent_)
+        large_avatar.setPixmap(self.pixmap)
+        large_avatar.setAlignment(Qt.Alignment.AlignCenter)
+        large_avatar.move(int((self.parent_.width()-large_avatar.width())/2),int((self.parent_.height()-large_avatar.width())/2))
+        large_avatar.clicked.connect(large_avatar.close)
+        large_avatar.setToolTip("单击这个放大的图像可以关闭")
+        large_avatar.show()
+        
 class EnhancedEdit(QLineEdit):
     # 一个自定义QLineEdit，可以在失去焦点和获得焦点时时传递信号
     lostFocus=pyqtSignal()
@@ -61,13 +138,15 @@ class QLogger(logging.Handler):
     def scroll_widget_to_bottom(self):
         self.widget.verticalScrollBar().setSliderPosition(self.widget.verticalScrollBar().maximum())
 class TestProcessor():
-    def __init__(self,show_qr_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal):
+    def __init__(self,show_qr_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal):
         self.logger=logging.getLogger(__name__)
         self.expire=0
         with open(file="config.json",mode="r",encoding="utf-8") as conf_reader:
             self.conf=json.loads(conf_reader.read())
         self.show_qr_signal=show_qr_signal
         self.close_qr_signal=close_qr_signal
+        self.user_info_signal=user_info_signal
+        self.update_info_signal=update_info_signal
         self.session=requests.sessions.session()
         default_headers={
             "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36 Edg/88.0.705.74",
@@ -133,7 +212,7 @@ class TestProcessor():
                 post_data={"random":random_,"useSelfWxapp":"true"}
                 try:
                     json_response=self.session.post("https://oauth.u.hep.com.cn/oauth/wxapp/confirm/qr",params=post_data).json()
-                except:
+                except requests.exceptions.RequestException:
                     self.logger.error("确认QR码扫描状态过程中传输数据出错，将继续")
                 else:
                     if json_response["data"]["code"]==200:
@@ -231,7 +310,40 @@ class TestProcessor():
         zip_=json_response["data"]["zip"]
         mobile=json_response["data"]["mobile"]
         self.logger.info("用户 %s 来自 %s，手机号 %s" %(name,university_name,zip_+" "+mobile))
+        self.user_info=self.get_user_info()
+        self.user_info.update({"name":name,"phone":zip_+" "+mobile})
         self.session.headers.update({"Referer": "https://ssxx.univs.cn/client/detail/%s" %(self.activity_id)})
+        self.user_info_signal.emit(self.user_info)
+        self.logger.debug("已提交用户数据")
+    def get_user_info(self):
+        orig_headers=self.session.headers
+        avatar=None
+        self.session.headers.update({"Referer": "https://ssxx.univs.cn/client/detail/%s/score" %(self.activity_id)})
+        json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/race/grade/",params={"t":int(time.time()),"activity_id":self.activity_id}).json()
+        self.logger.debug("服务器返回用户信息：%s" %json_response)
+        if json_response["code"]==1005:
+            self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
+            raise RuntimeError("检测到此账号在其他客户端登陆")
+        elif json_response["code"]!=0:
+            self.logger.error("服务器返回错误代码：%d，错误信息：%s" %(json_response["code"],json_response["message"]))
+            raise RuntimeError("查询分数过程中服务器返回数据有误，查看日志获得更多信息")
+        integral=json_response["data"]["integral"] # 分数
+        join_times=json_response["data"]["join_times"] # 答题次数
+        t_join_times=json_response["data"]["t_join_times"] #团队分数
+        t_integral=json_response["data"]["t_integral"] # 团队答题次数
+        university_name=json_response["data"]["university_name"] # 学校名称
+        province_name=json_response["data"]["province_name"] # 地区
+        json_response=self.session.get("https://ssxx.univs.cn/cgi-bin/user/race/fight/accuracy/",params={"t":int(time.time()),"activity_id":self.activity_id}).json()
+        self.logger.debug("获取用户答题准确率信息内容：%s" %json_response)
+        if json_response["code"]==1005:
+            self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
+            raise RuntimeError("检测到此账号在其他客户端登陆")
+        elif json_response["code"]!=0:
+            self.logger.error("服务器返回错误代码：%d，错误信息：%s" %(json_response["code"],json_response["message"]))
+            raise RuntimeError("查询分数过程中服务器返回数据有误，查看日志获得更多信息")
+        avatar=json_response["data"]
+        self.session.headers.update(orig_headers)
+        return {"integral":integral,"join_times":join_times,"t_join_times":t_join_times,"t_integral":t_integral,"university_name":university_name,"avatar":avatar,"province_name":province_name}
     def is_enabled(self,title:str):
         for key in self.conf.keys():
             if type(self.conf[key])==dict and "title" in self.conf[key] and "enabled" in self.conf[key] and self.conf[key]["title"]==title:
@@ -509,6 +621,8 @@ class TestProcessor():
         else:
             self.logger.error("提交失败，请在调试模式下查看服务器返回数据以确定问题")
             raise RuntimeError("提交结果过程中服务器返回数据有误，查看日志获得更多信息")
+        self.logger.debug("正在更新得分情况")
+        self.update_info_signal.emit(self.get_user_info())
         if self.expire-time.time()<500:
             self.update_token()
     def encrypt_with_pubkey(self,string:str,time_:int=int(time.time())):
@@ -558,40 +672,45 @@ class TestProcessor():
         result=dict()
         for part in token.split("."):
             self.logger.debug("Token分片：%s" %part)
-            if part==token.split(".")[-1]:
+            try:
+                result[part]=json.loads(base64.b64decode(part+"==").decode())
+            except Exception:
                 result[part]=None
                 self.logger.debug("跳过分片解码")
             else:
-                result[part]=json.loads(base64.b64decode(part+"==").decode())
                 self.logger.debug("分片解码完成")
         return result
 class Work(QObject):
-    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,tray:QSystemTrayIcon):
+    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,tray:QSystemTrayIcon,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal):
         super().__init__()
         self.finish_signal=finish_signal
         self.show_qr_signal=show_qr_signal
         self.close_qr_signal=close_qr_signal
+        self.user_info_signal=user_info_signal
         self.tray=tray
+        self.update_info_signal=update_info_signal
         self.logger=logging.getLogger(__name__)
     def start(self):
         self.logger.debug("正在启动子线程")
-        self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal)
+        self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
         self.logger.debug("已实例化处理类")
         self.processor.start(tray=self.tray)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
 class BootStrap(QObject):
-    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,tray:QSystemTrayIcon,times:int=30):
+    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,tray:QSystemTrayIcon,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal,times:int=30):
         super().__init__()
         self.logger=logging.getLogger(__name__)
         self.show_qr_signal=show_qr_signal
         self.finish_signal=finish_signal
         self.close_qr_signal=close_qr_signal
+        self.user_info_signal=user_info_signal
+        self.update_info_signal=update_info_signal
         self.times=times
         self.tray=tray
     def start(self):
         self.logger.debug("正在启动子线程")
-        self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal)
+        self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
         self.logger.debug("已实例化处理类")
         self.processor.bootstrap(times=self.times,tray=self.tray)
         self.finish_signal.emit()
@@ -708,7 +827,12 @@ class SettingWindow(QDialog):
         hide.setToolTip("最小化窗口到托盘")
         hide.setStyleSheet(theme["check_box"])
         hide.setObjectName("hide")
-        for widget in [proxy,theme_group,debug_check,way,hide,auth]:
+        show_user_info=QCheckBox("显示用户信息")
+        show_user_info.setChecked(self.conf["show_user_info"])
+        show_user_info.setToolTip("是否在获取用户信息后显示到程序界面上")
+        show_user_info.setStyleSheet(theme["check_box"])
+        show_user_info.setObjectName("show_user_info")
+        for widget in [proxy,theme_group,debug_check,way,hide,show_user_info,auth]:
             if y+1>=self.shape:
                 y=0
                 x=x+1
@@ -751,6 +875,7 @@ class SettingWindow(QDialog):
                             times=int(j.text())
                         data={"title":group.title(),"enabled":enabled,"times":times}
                     settings[group.objectName()]=data
+        settings.update({"font_prop":self.conf["font_prop"]})
         self.logger.debug("设置数据：%s" %settings)
         with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
             conf_writer.write(json.dumps(settings,ensure_ascii=False,sort_keys=True,indent=4))
@@ -809,11 +934,13 @@ class SettingWindow(QDialog):
 
             break
         return data
-class UI(QWidget):
+class UI(QMainWindow):
     update_signal=pyqtSignal(str)
     show_qr_signal=pyqtSignal(bytes)
     finish_signal=pyqtSignal()
     close_qr_signal=pyqtSignal()
+    user_info_signal=pyqtSignal(dict)
+    update_info_signal=pyqtSignal(dict)
     class Theme():
         def __init__(self,name:str="default"):
             if os.path.exists("themes")==False:
@@ -828,6 +955,9 @@ class UI(QWidget):
                     "name":"默认",
                     "logging_fmt":"%(asctime)s-%(levelname)s-%(message)s",
                     "logging_datefmt":"%Y-%m-%d %H:%M:%S",
+                    "main":"",
+                    "dock":"QDockWidget{background:#9BE3DE;border:none;border-radius:5px;}",
+                    "avatar":"QWidget{background:#9BE3DE;border:none;border-radius:5px;}",
                     "opacity":0.9,
                     "size":[1024,768],
                     "title":"QLabel{border:none;border-radius:5px;background:transparent;color:#9AD3BC;font-size:60px;}",
@@ -887,6 +1017,9 @@ class UI(QWidget):
             self.tray_show=theme["tray_show_icon"]
             self.tray_exit=theme["tray_exit_icon"]
             self.tray_menu=theme["tray_menu"]
+            self.main=theme["main"]
+            self.avatar=theme["avatar"]
+            self.dock=theme["dock"]
         def write_theme(self,name:str,theme:dict):
             if os.path.exists("themes/%s" %name)==False:
                 os.mkdir("themes/%s" %name)
@@ -913,6 +1046,8 @@ class UI(QWidget):
         super().__init__()
         self.m_flag=False
         self.need_message=True
+        central_widget=QWidget()
+        self.setCentralWidget(central_widget)
         self.logger=logging.getLogger(__name__)
         filehandler=logging.FileHandler(filename="logs.log",mode="w",encoding="utf-8")
         handler=QLogger(update_signal=self.update_signal)
@@ -925,6 +1060,8 @@ class UI(QWidget):
             "theme":"default",
             "way":1,
             "hide":False,
+            "show_user_info":True,
+            "font_prop":"SimSun",
             "auth":{
                 "token":"",
                 "refresh_token":"",
@@ -966,7 +1103,6 @@ class UI(QWidget):
         with open(file="config.json",mode="r",encoding="utf-8") as conf_reader:
             conf=json.loads(conf_reader.read())
         debug=bool(conf["debug"])
-        self.hide_to_menu=conf["hide"]
         if debug==True:
             handler.setLevel(logging.DEBUG)
             filehandler.setLevel(logging.DEBUG)
@@ -975,6 +1111,7 @@ class UI(QWidget):
             self.theme=self.Theme(name=conf["theme"])
         except:
             self.theme=self.Theme()
+        self.setStyleSheet(self.theme.main)
         formatter=logging.Formatter(fmt=self.theme.logging_fmt,datefmt=self.theme.logging_datefmt)
         handler.setFormatter(formatter)
         filehandler.setFormatter(formatter)
@@ -990,11 +1127,11 @@ class UI(QWidget):
         self.tray.setIcon(QIcon(self.theme.tray))
         self.tray.setToolTip("ChinaUniOnlineGUI")
         self.tray.activated.connect(self.tray_func)
-        self.work=Work(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray)
+        self.work=Work(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
         self.work_thread=QThread()
         self.work.moveToThread(self.work_thread)
         self.main_layout=QGridLayout()
-        self.setLayout(self.main_layout)
+        central_widget.setLayout(self.main_layout)
         self.title=QLabel("ChinaUniOnlineGUI")
         self.title.setStyleSheet(self.theme.title)
         self.title.setAlignment(Qt.Alignment.AlignCenter)
@@ -1054,9 +1191,14 @@ class UI(QWidget):
         self.update_signal.connect(handler.widget.appendPlainText)
         handler.widget.textChanged.connect(handler.scroll_widget_to_bottom)
         self.show_qr_signal.connect(self.show_qr)
+        self.user_info_signal.connect(self.user_info_callback)
+        self.update_info_signal.connect(self.update_info_callback)
         self.logger.debug("当前调试状态：%s，使用样式：%s，完成UI初始化" %(debug,self.theme.name))
         self.logger.debug("正在尝试更新旧版配置")
         self.update_conf(conf=conf)
+        self.hide_to_menu=conf["hide"]
+        self.show_user_info=conf["show_user_info"]
+        self.font_prop=conf["font_prop"]
         tray_menu=QMenu(parent=self)
         action_show=QAction(icon=QIcon(self.theme.tray_show),text="显示(&S)",parent=self)
         action_show.triggered.connect(self.show)
@@ -1066,6 +1208,55 @@ class UI(QWidget):
         tray_menu.addAction(action_exit)
         tray_menu.setStyleSheet(self.theme.tray_menu)
         self.tray.setContextMenu(tray_menu)
+    def update_info_callback(self,info:dict):
+        self.avatar.update_score(score=info["integral"],t_score=info["t_integral"])
+        self.avatar.update_times(times=info["join_times"],t_times=info["t_join_times"])
+        self.avatar.update_avatar(self.draw_pic(info["avatar"]))
+    def user_info_callback(self,info:dict):
+        # info:{"integral":integral,"join_times":join_times,"t_join_times":t_join_times,"t_integral":t_integral,"university_name":university_name,"phone":zip_+" "+mobile,"avatar":avatar}
+        self.logger.debug("获取数据：%s" %info)
+        if self.show_user_info==True:
+            self.avatar=UserAvatar(parent=self,name=info["name"],phone=info["phone"],score=info["integral"],times=info["join_times"],t_score=info["t_integral"],t_times=info["t_join_times"],school=info["university_name"],avatar=self.draw_pic(data=info["avatar"]),province_name=info["province_name"])
+            self.avatar.resize(int(self.width()*(200/1024)),int(self.height()*(200/1024)))
+            self.avatar.setStyleSheet(self.theme.avatar)
+            dock=QDockWidget("当前登陆用户信息：",self)
+            dock.setWidget(self.avatar)
+            dock.setStyleSheet(self.theme.dock)
+            self.addDockWidget(Qt.DockWidgetAreas.RightDockWidgetArea,dock)
+    def draw_pic(self,data:list):
+        self.logger.debug("获取图片信息：%s" %data)
+        titles=list()
+        values_1=list()
+        values_2=list()
+        for item in data:
+            titles.append(item["title"])
+            if item["mode"]==1:
+                values_1.append(item["accuracy"])
+            elif item["mode"]==2:
+                values_2.append(item["accuracy"])
+        angles=numpy.linspace(0,2*numpy.pi,len(titles),endpoint=False)
+        angles=numpy.concatenate((angles,[angles[0]]))
+        titles=numpy.concatenate((titles,[titles[0]]))
+        fig = plt.figure(dpi=100)
+        ax = plt.subplot(111, polar=True)
+        ax.set_thetagrids(angles*180/numpy.pi, titles,fontproperties=self.font_prop)
+        ax.set_theta_zero_location('N')
+        ax.set_rlim(0, 100)
+        ax.set_rlabel_position(315)
+        buffer=io.BytesIO()
+        if values_1!=[]:
+            values_1=numpy.concatenate((values_1,[values_1[0]]))
+            ax.plot(angles,values_1,label="个人模式分布")
+        if values_2!=[]:
+            values_2=numpy.concatenate((values_2,[values_2[0]]))
+            ax.plot(angles,values_2,label="团队模式分布")
+        plt.legend(loc="best",prop=self.font_prop)
+        plt.title("用户正确率分布",fontproperties=self.font_prop)
+        fig.savefig(buffer)
+        data_bytes=buffer.getvalue()
+        plt.close(fig)
+        buffer.close()
+        return data_bytes
     def tray_func(self,reason:QSystemTrayIcon.ActivationReason):
         if reason==QSystemTrayIcon.ActivationReason.DoubleClick:
             if self.isHidden()==True:
@@ -1077,7 +1268,7 @@ class UI(QWidget):
                 self.tray.setVisible(True)
     def bootstrap(self):
         bootstrap_thread=QThread()
-        bootstrap=BootStrap(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray)
+        bootstrap=BootStrap(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
         bootstrap.moveToThread(bootstrap_thread)
         bootstrap_thread.started.connect(bootstrap.start)
         bootstrap_thread.finished.connect(self.finish_bootstrap)
@@ -1182,7 +1373,6 @@ class UI(QWidget):
         if event.button()==Qt.MouseButtons.LeftButton and self.isMaximized()==False and self.hasFocus()==True:
             self.old_pos=event.globalPosition() #获取鼠标相对窗口的位置
             self.logger.debug("已获取鼠标位置")
-            self.setCursor(QtGui.QCursor(Qt.CursorShape.SizeAllCursor))  #更改鼠标图标
     def mouseMoveEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标移动事件")
         super().mouseMoveEvent(event)
@@ -1192,6 +1382,7 @@ class UI(QWidget):
             self.move(self.x()+delta_x,self.y()+delta_y)#更改窗口位置
             self.logger.debug("已更改窗口位置")
             self.old_pos=event.globalPosition()
+            self.setCursor(QtGui.QCursor(Qt.CursorShape.SizeAllCursor))  #更改鼠标图标
     def mouseReleaseEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标释放事件")
         super().mouseReleaseEvent(event)
