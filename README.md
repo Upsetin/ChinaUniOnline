@@ -49,8 +49,8 @@
 #### 1.可参考GUI文件内，[@zhanghua000](http:\/\/github.com\/zhanghua000)推荐的方  
 #### 2.也可在电脑登录最新版微信，将答题页面分享给文件助手，电脑打开该页面并登录，使用抓包软件获取请求header里的token
 #### 3. 扫描二维码获取uid, 根据uid获得token (3.24更新)
-扫描sacnToGetUID.jpg图片, 然后得到uid, 把uid填入以下链接, 获得token
-https://ssxx.univs.cn/cgi-bin/authorize/token/?uid=xxxx&tdsourcetag=s_pctim_aiomsg
+扫描sacnToGetUID.jpg图片, 然后得到uid, 把uid填入以下链接, 获得token    
+https://ssxx.univs.cn/cgi-bin/authorize/token/?uid=xxxx&tdsourcetag=s_pctim_aiomsg    
 运行main.exe输入token即可开始刷题
 
 # 该项目蓝奏云下载地址( 3.18 已更新 ) [https://wws.lanzous.com/ikdLUn2m1gj](https://wws.lanzous.com/ikdLUn2m1gj) 密码:i0hq
