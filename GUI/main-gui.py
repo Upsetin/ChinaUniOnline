@@ -20,6 +20,7 @@ from PyQt6.QtCore import QObject, QRegularExpression, QThread, Qt, pyqtBoundSign
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5 as Cipher
 from PyQt6.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QMenu, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget, QSystemTrayIcon, QDockWidget, QMainWindow
+from tenacity import retry, wait_random, wait_fixed, retry_if_exception_type, stop_after_attempt
 from bs4 import BeautifulSoup
 os.chdir(os.path.split(os.path.realpath(__file__))[0])
 # 将工作目录转移到脚本所在目录，保证下面的相对路径都能正确找到文件
@@ -374,7 +375,13 @@ class TestProcessor():
                 if enabled==True:
                     for i in range(times):
                         self.logger.info("正在处理第 %d 次的 %s" %(i+1,title))
-                        self.process(mode_id=key,sleep=sleepflag)
+                        try:
+                            self.process(mode_id=key,sleep=sleepflag)
+                        except requests.exceptions.ConnectionError as e:
+                            self.logger.error("和服务器通信出错")
+                            self.logger.debug("第 %d 次执行失败，错误详细内容：%s" %(i+1,e))
+                        else:
+                            self.logger.debug("第 %d 次执行成功" %(i+1))
                 else:
                     self.logger.info("%s 已跳过" %title)
         except RuntimeError as e:
@@ -396,6 +403,7 @@ class TestProcessor():
             with open(file="config.json",mode="w",encoding="utf-8") as writer:
                 writer.write(json.dumps(conf,sort_keys=True,indent=4,ensure_ascii=False))
             self.logger.debug("已更新Token数据供下次使用")
+    @retry(wait=wait_fixed(2)+wait_random(0,3),retry=retry_if_exception_type(requests.exceptions.ConnectionError),stop=stop_after_attempt(5),reraise=True)
     def process(self,mode_id:str,sleep:bool=True):
         headers={"Referer":"https://ssxx.univs.cn/client/exam/%s/1/1/%s" %(self.activity_id,mode_id),}
         self.session.headers.update(headers)
