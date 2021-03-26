@@ -1,7 +1,6 @@
 import os
 import io
 import sys
-import sqlite3
 import json
 import base64
 import random
@@ -17,7 +16,7 @@ from urllib import parse
 from PyQt6 import QtGui
 from PyQt6.QtGui import QAction, QIcon, QMouseEvent, QPixmap, QRegularExpressionValidator
 from PyQt6.QtCore import QObject, QRegularExpression, QThread, Qt, pyqtBoundSignal, pyqtSignal
-from PyQt6.QtSql import QSqlDatabase
+from PyQt6.QtSql import QSqlDatabase, QSqlQuery
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5 as Cipher
 from PyQt6.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QMenu, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget, QSystemTrayIcon, QDockWidget, QMainWindow
@@ -27,6 +26,9 @@ os.chdir(os.path.split(os.path.realpath(__file__))[0])
 # 将工作目录转移到脚本所在目录，保证下面的相对路径都能正确找到文件
 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ChinaUniOnlineGUI")
 # 让任务栏图标可以正常显示
+class SQLException(Exception):
+    def __init__(self,*args):
+        super().__init__(*args)
 class EnhancedLabel(QLabel):
     # 一个可以在被单击时发送信号的标签
     clicked=pyqtSignal()
@@ -379,11 +381,33 @@ class TestProcessor():
                 return int(self.conf[key]["times"])
         return 1
     def start(self,tray:QSystemTrayIcon):
-        conn=sqlite3.connect("answers.db")
-        self.cur=conn.cursor()
+        if QSqlDatabase.contains("qt_sql_default_connection"):
+            db=QSqlDatabase.database("qt_sql_default_connection")
+        else:
+            db=QSqlDatabase.addDatabase("QSQLITE")
+        db.setDatabaseName("answers.db")
+        if db.open()==False:
+            self.logger.error("数据库受损，无法打开")
+            self.logger.debug("详细错误：%s" %db.lastError().text())
+            raise RuntimeError("数据库受损")
         self.logger.debug("已启动数据库连接")
+        self.query=QSqlQuery(db=db)
         whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
         # 不应该休眠的模式的白名单列表
+        tables=db.tables()
+        if "ALL_ANSWERS" not in tables or len(tables)>1:
+            self.logger.info("正在更新数据库到新版文件")
+            shutil.copy("answers.db","answers.db.bak")
+            self.logger.info("旧版数据库备份为answers.db.bak")
+            self.logger.debug("全部旧数据表：%s" %tables)
+            self.query.exec("CREATE TABLE 'ALL_ANSWERS' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)")
+
+            for table in tables:
+                self.logger.debug("正在插入 %s 的旧数据到新表中" %table)
+                self.query.exec("INSERT OR IGNORE INTO 'ALL_ANSWERS' SELECT * FROM '%s'" %table)
+                self.logger.debug("正在删除旧数据表")
+                self.query.exec("DROP TABLE '%s'" %table)
+            db.commit()
         try:
             for key in self.ids.keys():
                 title=self.ids[key]["title"]
@@ -416,10 +440,11 @@ class TestProcessor():
         finally:
             self.session.close()
             self.logger.debug("已关闭Session")
-            conn.commit()
-            self.cur.close()
-            conn.close()
-            self.logger.debug("已关闭数据库连接")
+            if db.commit()==True:
+                self.logger.debug("提交数据库更改成功，已关闭数据库连接")
+                db.close()
+            else:
+                self.logger.error("提交数据库更改失败")
             with open(file="config.json",mode="r",encoding="utf-8") as reader:
                 conf=json.loads(reader.read())
             conf["auth"]={"token":self.token,"refresh_token":self.refresh_token,"uid":self.uid}
@@ -542,7 +567,7 @@ class TestProcessor():
         # 题目
         title=self.clean_element(string_=json_response['data']['title'])
         self.logger.info("题目：%s" %title)
-        answer=self.search_ans(mode_id=mode_id,question=title)
+        answer=self.search_ans(question=title)
         self.logger.debug("选择项目：%s" %op_result)
         if answer!=[]:
             self.logger.info("来自数据库的答案：%s" %answer)
@@ -567,32 +592,22 @@ class TestProcessor():
                     answer_str=answer_titles[0]
                 else:
                     answer_str="#".join(answer_titles)
-                self.update_database(question=title,mode_id=mode_id,answer=answer_str)
+                self.update_database(question=title,answer=answer_str)
                 self.logger.info("捕获正确答案并更新数据库成功")
             else:
                 raise RuntimeError("捕获答案出错，查看日志以获得更多信息")
-    def update_database(self,question:str,mode_id:str,answer:str):
-        self.logger.debug("正在加入条目 QUESTION=%s,ANSWER=%s 到表%s中" %(question,answer,mode_id))
-        try:
-            res=self.cur.execute("SELECT ANSWER FROM '%s' WHERE QUESTION='%s'" %(mode_id,question)).fetchone()
-        except sqlite3.OperationalError:
-            self.logger.error("查询数据库失败，正在尝试创建表")
-            try:
-                self.cur.execute("CREATE TABLE '%s' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)" %mode_id)
-            except sqlite3.OperationalError:
-                self.logger.error("数据库内已存在表，数据库受损？")
+    def update_database(self,question:str,answer:str):
+        self.logger.debug("正在加入条目 QUESTION=%s,ANSWER=%s 到表ALL_ANSWERS中" %(question,answer))
+        if self.query.exec("INSERT OR REPLACE INTO 'ALL_ANSWERS' (QUESTION,ANSWER) VALUES ('%s','%s')" %(question,answer))==False:
+            self.logger.error("插入数据库失败，原因：%s，正在尝试创建表" %self.query.lastError().text())
+            if self.query.exec("CREATE TABLE 'ALL_ANSWERS' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)")==False:
+                self.logger.error("创建表失败，原因：%s，数据库受损？" %self.query.lastError().text())
                 raise RuntimeError("数据库已受损，需要手动修复")
             else:
-                self.cur.execute("INSERT INTO '%s' (QUESTION,ANSWER) VALUES ('%s','%s')" %(mode_id,question,answer))
+                self.query.exec("INSERT INTO 'ALL_ANSWERS' (QUESTION,ANSWER) VALUES ('%s','%s')" %(question,answer))
                 self.logger.debug("已创建表并加入数据库条目")
         else:
-            self.logger.debug("search_result=%s" %res)
-            if res==None:
-                self.cur.execute("INSERT INTO '%s' (QUESTION,ANSWER) VALUES ('%s','%s')" %(mode_id,question,answer))
-                self.logger.debug("已加入数据库条目")
-            else:
-                self.cur.execute("UPDATE '%s' SET QUESTION = '%s', ANSWER = '%s'" %(mode_id,question,answer))
-                self.logger.debug("已更新数据库条目")
+            self.logger.debug("已更新数据库条目")
     def process_ans(self,question_id:str,activity_id:str,mode_id:str,answer_ids:list,catch:bool=False):
         data={"activity_id":activity_id,"question_id":question_id,"answer":None,"mode_id":mode_id,"way":self.conf["way"]}
         if catch==True:
@@ -628,16 +643,19 @@ class TestProcessor():
                 cleaned=cleaned+1
         self.logger.debug("共清理 %d 个干扰元素" %cleaned)
         return soup.get_text().strip()
-    def search_ans(self,mode_id:str,question:str):
+    def search_ans(self,question:str):
         # 数据要求：一个问题对应一个答案，整张表内应该不存在同名问题，
         # 多个答案用#组合为一个字符串，查询时将自动按#切割为列表，无答案返回空列表
-        try:
-            res=self.cur.execute("SELECT ANSWER from '%s' WHERE QUESTION='%s'" %(mode_id,question)).fetchone()
-        except sqlite3.OperationalError:
-            self.logger.error("查询SQL数据库出错")
+
+        if self.query.exec("SELECT ANSWER from 'ALL_ANSWERS' WHERE QUESTION='%s'" %(question))==False:
+            self.logger.error("查询SQL数据库出错，原因：%s" %self.query.lastError().text())
         else:
-            if res!=None:
-                return str(res[0]).split("#")
+            self.query.next()
+            value=self.query.value(0)
+            if "#" in str(value):
+                return str(value).split("#")
+            else:
+                return [str(value)]
         return []
     def finish(self,activity_id:str,mode_id:str,race_code:str,n:str):
         payload={
@@ -674,17 +692,32 @@ class TestProcessor():
         return base64.b64encode(cipher.encrypt(string.encode())).decode()
     def bootstrap(self,tray:QSystemTrayIcon,times:int=30):
         # 初始化题目数据库，建议使用小号
+        if QSqlDatabase.contains("qt_sql_default_connection"):
+            db=QSqlDatabase.database("qt_sql_default_connection")
+        else:
+            db=QSqlDatabase.addDatabase("QSQLITE")
+        db.setDatabaseName("answers.db")
+        if db.open()==False:
+            self.logger.error("数据库受损，无法打开")
+            self.logger.debug("详细错误：%s" %db.lastError().text())
+            raise RuntimeError("数据库受损")
+        self.logger.debug("已启动数据库连接")
+        self.query=QSqlQuery(db=db)
+        self.query.exec("CREATE TABLE 'ALL_ANSWERS' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)")
         self.logger.info("正在初始化题目数据库，强烈建议使用无关小号登陆")
         self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
         try:
             for key in self.ids.keys():
                 for i in range(times):
+                    self.logger.info("正在第 %d 次获取答案数据库" %(i+1))
                     self.process(mode_id=key,sleep=False)
         except RuntimeError as e:
             self.logger.error("处理过程出现错误")
             self.logger.debug("错误详细内容：%s" %e)
             tray.showMessage("ChinaUniOnlineGUI：错误",str(e),QSystemTrayIcon.MessageIcon.Critical)
         else:
+            db.commit()
+            db.close()
             self.logger.info("初始化数据库成功")
     def get_token(self):
         with open(file="config.json",mode="r",encoding="utf-8") as reader:

@@ -2,7 +2,7 @@
 *.json
 snippet.js
 test.png
-answers.db*
+answers*.db*
 test
 themes
 lang
