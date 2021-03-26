@@ -45,13 +45,13 @@
 + 无Python环境
   下载可执行文件，将题库.csv与main.exe置于同一文件夹，直接运行即可.
   
-### 关于uid或token的获取  
+### 关于uid或token的获取
+#### 在微信中访问链接 https://open.weixin.qq.com/connect/oauth2/authorize?appid=wxe12424c3b8aad5e6&redirect_uri=https://core.u.hep.com.cn/oauth/wechatmp/redirect&response_type=code&scope=snsapi_userinfo&state=5f582dd3683c2e0ae3aaacee-noguard-https://api.moeshin.com/univs_ssxx_uid/result.php/&connect_redirect=1#wechat_redirect  
 #### 1.可参考GUI文件内，[@zhanghua000](http:\/\/github.com\/zhanghua000)推荐的方  
 #### 2.也可在电脑登录最新版微信，将答题页面分享给文件助手，电脑打开该页面并登录，使用抓包软件获取请求header里的token
 #### 3. 扫描二维码获取uid, 根据uid获得token (3.24更新)
 
-#二维码涉嫌广告，已删除（由于本人未仔细核查，给大家带来不便敬请谅解）
-  把uid填入以下链接, 获得token    
+#### 获得token，将以下链接中的xxxx改为自己的uid    
 https://ssxx.univs.cn/cgi-bin/authorize/token/?uid=xxxx&tdsourcetag=s_pctim_aiomsg    
 运行main.exe输入token即可开始刷题
 
