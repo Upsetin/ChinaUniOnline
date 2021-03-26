@@ -265,6 +265,7 @@ def Confire(question_id='5f17ef305d6fe02504ba5e17',answer=['5f75fe348e6c9f85d1b6
         'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a'
     }
 
+    time.sleep(random.uniform(0.1,0.3))
     response = requests.request("POST", url, headers=headers, data=payload)
 
     data = response.json()
