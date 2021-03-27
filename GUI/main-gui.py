@@ -489,7 +489,11 @@ class TestProcessor():
         n="".join(random.choices(population=list(string.digits+string.ascii_letters),k=4))
         # 验证码生成逻辑在js的1713行
         self.logger.debug("生成验证码：%s" %n)
-        verify_pos=self.normal_choice_pos(lst=question_ids)
+        if sleep==True:
+            verify_pos=self.normal_choice_pos(lst=question_ids)
+        else:
+            verify_pos=self.normal_choice_pos(lst=question_ids,max_=18)
+            # 似乎在PVP模式的验证码的位置超过第20个(列表序号19)会有问题？偶尔出现，极难验证
         for question_id in question_ids:
             if sleep==True:
                 time.sleep(random.uniform(0.1,3.0))
@@ -510,14 +514,16 @@ class TestProcessor():
                 FailNum=FailNum+1
                 self.logger.info("第 %d 道题目失败" %(i+1))
         race_code=json_response["race_code"]
-        self.finish(race_code=race_code,activity_id=self.activity_id,mode_id=mode_id,n=n)
+        self.finish(race_code=race_code,activity_id=self.activity_id,mode_id=mode_id)
         self.logger.info("此次成功查询 %d 个题，收录 %d 个题" %(SuccessNum,FailNum))
-    def normal_choice_pos(self,lst:list):
+    def normal_choice_pos(self,lst:list,max_:int=None):
         mu=(len(lst)-1)/2
         sigma=len(lst)/6
+        if max_==None:
+            max_=len(lst)-1
         while True:
             index=int(random.normalvariate(mu=mu,sigma=sigma))
-            if 0<=index<len(lst):
+            if index in range(max_):
                 self.logger.debug("选中需要模拟验证的位置：%d" %index)
                 return index
     def check_verify(self,mode_id:str,n:str):
@@ -538,13 +544,14 @@ class TestProcessor():
         post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":self.conf["way"],"code":code}
         json_response=self.session.post("https://%s.univs.cn/cgi-bin/save/verification/code/" %self.prefix,json=post_data).json()
         self.logger.debug("submit_response=%s" %json_response)
-        if json_response["code"]==1005:
+        if json_response["code"]==0:
+            self.logger.error("提交验证码成功")
+        elif json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
             raise RuntimeError("检测到此账号在其他客户端登陆")
-        elif json_response["code"]!=0:
-            self.logger.error("提交验证码失败")
         else:
-            self.logger.info("提交验证码成功")
+            msg=self.error_handler(json_response=json_response)
+            self.logger.info("提交验证码失败，错误代码：%d，服务器返回信息：%s" %(json_response["code"],msg))
     def get_option(self,activity_id,question_id,mode_id,n:str,veryfy:bool=False):
         if self.prefix not in ["ssxx"]:
             veryfy=False
@@ -662,29 +669,28 @@ class TestProcessor():
         self.query.last()
         if int(self.query.value(0))!=0:
             self.logger.debug("找到 %d 个的答案" %int(self.query.value(0)))
+            # 答案数应当永远为 1
             if self.query.exec("SELECT ANSWER from 'ALL_ANSWERS' WHERE QUESTION='%s'" %(question))==False:
                 self.logger.error("查询SQL数据库出错，原因：%s" %self.query.lastError().text())
             else:
-                
                 self.query.last()
                 value=self.query.value(0)
                 self.logger.debug("查询得到的值：%s" %value)
-                if "#" in str(value):
-                    return str(value).split("#")
-                else:
-                    return [str(value)]
+                return str(value).split("#")
         else:
             self.logger.debug("未找到答案")
         return []
-    def finish(self,activity_id:str,mode_id:str,race_code:str,n:str):
+    def finish(self,activity_id:str,mode_id:str,race_code:str):
         payload={
             "race_code":race_code
         }
         json_response=self.session.post("https://%s.univs.cn/cgi-bin/race/finish/" %self.prefix,json=payload).json()
         self.logger.debug(json_response)
         if json_response["code"]==4823:
+            n="".join(random.choices(string.ascii_letters+string.digits,k=4))
+            self.check_verify(mode_id=mode_id,n=n)
             self.submit_verify(mode_id=mode_id,n=n)
-            self.finish(activity_id=activity_id,mode_id=mode_id,race_code=race_code,n=n)
+            self.finish(activity_id=activity_id,mode_id=mode_id,race_code=race_code)
         elif json_response["code"]==0:
             owner=json_response["data"]["owner"]
             self.logger.info("执行完成，正确数：%d，答题用时：%d 秒" %(owner["correct_amount"],owner["consume_time"]))
@@ -692,7 +698,7 @@ class TestProcessor():
                 opponent=json_response["data"]["opponent"]
                 self.logger.info("处于对战模式，对方信息：来自 %s 的 %s，正确数 %d，用时 %d秒" %(opponent["univ_name"],opponent["name"],opponent["correct_amount"],opponent["consume_time"]))
         elif json_response["code"]==4831:
-            self.logger.error("答题用时过短")
+            self.logger.warning("答题用时过短")
         elif json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
             raise RuntimeError("检测到此账号在其他客户端登陆")
