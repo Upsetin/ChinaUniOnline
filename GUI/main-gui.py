@@ -658,19 +658,23 @@ class TestProcessor():
     def search_ans(self,question:str):
         # 数据要求：一个问题对应一个答案，整张表内应该不存在同名问题，
         # 多个答案用#组合为一个字符串，查询时将自动按#切割为列表，无答案返回空列表
-
-        if self.query.exec("SELECT ANSWER from 'ALL_ANSWERS' WHERE QUESTION='%s'" %(question))==False:
-            self.logger.error("查询SQL数据库出错，原因：%s" %self.query.lastError().text())
-        else:
-            
-            self.query.last()
-            value=self.query.value(0)
-            self.logger.debug("查询得到的值：%s" %value)
-            if value!=None:
+        self.query.exec("SELECT COUNT(ANSWER) FROM 'ALL_ANSWERS' WHERE QUESTION='%s'" %(question))
+        self.query.last()
+        if int(self.query.value(0))!=0:
+            self.logger.debug("找到 %d 个的答案" %int(self.query.value(0)))
+            if self.query.exec("SELECT ANSWER from 'ALL_ANSWERS' WHERE QUESTION='%s'" %(question))==False:
+                self.logger.error("查询SQL数据库出错，原因：%s" %self.query.lastError().text())
+            else:
+                
+                self.query.last()
+                value=self.query.value(0)
+                self.logger.debug("查询得到的值：%s" %value)
                 if "#" in str(value):
                     return str(value).split("#")
                 else:
                     return [str(value)]
+        else:
+            self.logger.debug("未找到答案")
         return []
     def finish(self,activity_id:str,mode_id:str,race_code:str,n:str):
         payload={
