@@ -330,7 +330,7 @@ class TestProcessor():
         json_response=self.session.get("https://%s.univs.cn/cgi-bin/portal/user/" %self.prefix,params=params).json()
         if json_response["code"]==1002:
             self.logger.error("Token已过期")
-            raise RuntimeError(json_response["message"])
+            raise RuntimeError(self.error_handler(json_response=json_response))
         self.logger.debug("获取用户信息：%s" %json_response)
         name=json_response["data"]["name"]
         university_name=json_response["data"]["university_name"]
@@ -541,13 +541,13 @@ class TestProcessor():
         json_response=self.session.post("https://%s.univs.cn/cgi-bin/save/verification/code/" %self.prefix,json=post_data).json()
         self.logger.debug("submit_response=%s" %json_response)
         if json_response["code"]==0:
-            self.logger.error("提交验证码成功")
+            self.logger.info("提交验证码成功")
         elif json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
             raise RuntimeError("检测到此账号在其他客户端登陆")
         else:
             msg=self.error_handler(json_response=json_response)
-            self.logger.info("提交验证码失败，错误代码：%d，服务器返回信息：%s" %(json_response["code"],msg))
+            self.logger.error("提交验证码失败，错误代码：%d，服务器返回信息：%s" %(json_response["code"],msg))
     def get_option(self,activity_id,question_id,mode_id,n:str,veryfy:bool=False):
         if self.prefix not in ["ssxx"]:
             veryfy=False
@@ -704,6 +704,7 @@ class TestProcessor():
         self.logger.debug("正在更新得分情况")
         self.update_info_signal.emit(self.get_user_info())
         if self.expire-time.time()<500:
+            self.logger.warning("Token还有 %d 秒即将过期" %(self.expire-time.time()))
             self.update_token()
     def encrypt_with_pubkey(self,string:str,time_:int=int(time.time())):
         params={"t":time_}
@@ -759,14 +760,13 @@ class TestProcessor():
         self.logger.debug("返回数据：%s" %json_response)
         if json_response["code"]==0:
             self.token=json_response["token"]
-            self.session.headers.update({"Authorize":"Bearer %s" %self.token})
+            self.session.headers.update({"Authorization":"Bearer %s" %self.token})
             self.logger.info("更新Token成功")
             self.expire=self.decode_token()[self.token.split(".")[1]]["exp"]
         elif json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
         else:
-            msg=self.error_handler(json_response=json_response)
-            self.logger.error("更新Token失败,服务器返回信息：%s" %msg)
+            self.logger.error("更新Token失败,服务器返回信息：%s" %self.error_handler(json_response=json_response))
     def decode_token(self,token:str=""):
         # 原理来自https://github.com/deximy/FxxkSsxx
         if token=="":
