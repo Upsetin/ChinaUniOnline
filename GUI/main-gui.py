@@ -489,11 +489,7 @@ class TestProcessor():
         n="".join(random.choices(population=list(string.digits+string.ascii_letters),k=4))
         # 验证码生成逻辑在js的1713行
         self.logger.debug("生成验证码：%s" %n)
-        if sleep==True:
-            verify_pos=self.normal_choice_pos(lst=question_ids)
-        else:
-            verify_pos=self.normal_choice_pos(lst=question_ids,max_=18)
-            # 似乎在PVP模式的验证码的位置超过第20个(列表序号19)会有问题？偶尔出现，极难验证
+        verify_pos=self.normal_choice_pos(lst=question_ids)
         for question_id in question_ids:
             if sleep==True:
                 time.sleep(random.uniform(0.1,3.0))
