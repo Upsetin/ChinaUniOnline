@@ -12,6 +12,7 @@ import requests
 import ctypes
 import numpy
 from matplotlib import pyplot as plt 
+from matplotlib import use as matplotuse
 from urllib import parse
 from PyQt6 import QtGui
 from PyQt6.QtGui import QAction, QIcon, QMouseEvent, QPixmap, QRegularExpressionValidator
@@ -26,6 +27,8 @@ os.chdir(os.path.split(os.path.realpath(__file__))[0])
 # 将工作目录转移到脚本所在目录，保证下面的相对路径都能正确找到文件
 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ChinaUniOnlineGUI")
 # 让任务栏图标可以正常显示
+matplotuse("Agg")
+# 让matplotlib使用Agg后端避免Tkinter在非主线程运行的问题
 class SQLException(Exception):
     def __init__(self,*args):
         super().__init__(*args)
@@ -380,7 +383,7 @@ class TestProcessor():
             if type(self.conf[key])==dict and "title" in self.conf[key] and "times" in self.conf[key] and self.conf[key]["title"]==title:
                 return int(self.conf[key]["times"])
         return 1
-    def start(self,tray:QSystemTrayIcon):
+    def start(self,tray:QSystemTrayIcon,times:int=None):
         if QSqlDatabase.contains("qt_sql_default_connection"):
             db=QSqlDatabase.database("qt_sql_default_connection")
         else:
@@ -390,6 +393,10 @@ class TestProcessor():
             self.logger.error("数据库受损，无法打开")
             self.logger.debug("详细错误：%s" %db.lastError().text())
             raise RuntimeError("数据库受损")
+        elif db.transaction()==False:
+            self.logger.error("启动数据库事务失败")
+            self.logger.debug("详细错误：%s" %db.lastError().text())
+            raise RuntimeError("数据库事务启动失败")
         self.logger.debug("已启动数据库连接")
         self.query=QSqlQuery(db=db)
         whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
@@ -412,7 +419,8 @@ class TestProcessor():
             for key in self.ids.keys():
                 title=self.ids[key]["title"]
                 enabled=self.ids[key]["enabled"]
-                times=self.ids[key]["times"]
+                if times==None:
+                    times=self.ids[key]["times"]
                 if key in whitelist_mode:
                     sleepflag=False
                     self.logger.debug("key=%s 关闭答题睡眠" %key)
@@ -440,11 +448,15 @@ class TestProcessor():
         finally:
             self.session.close()
             self.logger.debug("已关闭Session")
+            self.query.finish()
+            self.query.clear()
             if db.commit()==True:
-                self.logger.debug("提交数据库更改成功，已关闭数据库连接")
-                db.close()
+                self.logger.debug("提交数据库更改成功")
             else:
-                self.logger.error("提交数据库更改失败")
+                self.logger.error("提交数据库更改失败，正在回滚更改")
+                db.rollback()
+            db.close()
+            self.logger.info("已关闭数据库连接")
             with open(file="config.json",mode="r",encoding="utf-8") as reader:
                 conf=json.loads(reader.read())
             conf["auth"]={"token":self.token,"refresh_token":self.refresh_token,"uid":self.uid}
@@ -650,12 +662,15 @@ class TestProcessor():
         if self.query.exec("SELECT ANSWER from 'ALL_ANSWERS' WHERE QUESTION='%s'" %(question))==False:
             self.logger.error("查询SQL数据库出错，原因：%s" %self.query.lastError().text())
         else:
-            self.query.next()
+            
+            self.query.last()
             value=self.query.value(0)
-            if "#" in str(value):
-                return str(value).split("#")
-            else:
-                return [str(value)]
+            self.logger.debug("查询得到的值：%s" %value)
+            if value!=None:
+                if "#" in str(value):
+                    return str(value).split("#")
+                else:
+                    return [str(value)]
         return []
     def finish(self,activity_id:str,mode_id:str,race_code:str,n:str):
         payload={
@@ -701,6 +716,10 @@ class TestProcessor():
             self.logger.error("数据库受损，无法打开")
             self.logger.debug("详细错误：%s" %db.lastError().text())
             raise RuntimeError("数据库受损")
+        elif db.transaction()==False:
+            self.logger.error("启动数据库事务失败")
+            self.logger.debug("详细错误：%s" %db.lastError().text())
+            raise RuntimeError("数据库事务启动失败")
         self.logger.debug("已启动数据库连接")
         self.query=QSqlQuery(db=db)
         self.query.exec("CREATE TABLE 'ALL_ANSWERS' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)")
@@ -716,6 +735,8 @@ class TestProcessor():
             self.logger.debug("错误详细内容：%s" %e)
             tray.showMessage("ChinaUniOnlineGUI：错误",str(e),QSystemTrayIcon.MessageIcon.Critical)
         else:
+            self.query.finish()
+            self.query.clear()
             db.commit()
             db.close()
             self.logger.info("初始化数据库成功")
