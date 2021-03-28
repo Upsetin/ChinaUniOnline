@@ -330,7 +330,7 @@ class TestProcessor():
         json_response=self.session.get("https://%s.univs.cn/cgi-bin/portal/user/" %self.prefix,params=params).json()
         if json_response["code"]==1002:
             self.logger.error("Token已过期")
-            raise RuntimeError(json_response["message"])
+            raise RuntimeError(self.error_handler(json_response=json_response))
         self.logger.debug("获取用户信息：%s" %json_response)
         name=json_response["data"]["name"]
         university_name=json_response["data"]["university_name"]
@@ -510,14 +510,16 @@ class TestProcessor():
                 FailNum=FailNum+1
                 self.logger.info("第 %d 道题目失败" %(i+1))
         race_code=json_response["race_code"]
-        self.finish(race_code=race_code,activity_id=self.activity_id,mode_id=mode_id,n=n)
+        self.finish(race_code=race_code,activity_id=self.activity_id,mode_id=mode_id)
         self.logger.info("此次成功查询 %d 个题，收录 %d 个题" %(SuccessNum,FailNum))
-    def normal_choice_pos(self,lst:list):
+    def normal_choice_pos(self,lst:list,max_:int=None):
         mu=(len(lst)-1)/2
         sigma=len(lst)/6
+        if max_==None:
+            max_=len(lst)-1
         while True:
             index=int(random.normalvariate(mu=mu,sigma=sigma))
-            if 0<=index<len(lst):
+            if index in range(max_):
                 self.logger.debug("选中需要模拟验证的位置：%d" %index)
                 return index
     def check_verify(self,mode_id:str,n:str):
@@ -538,13 +540,14 @@ class TestProcessor():
         post_data={"activity_id":self.activity_id,"mode_id":mode_id,"way":self.conf["way"],"code":code}
         json_response=self.session.post("https://%s.univs.cn/cgi-bin/save/verification/code/" %self.prefix,json=post_data).json()
         self.logger.debug("submit_response=%s" %json_response)
-        if json_response["code"]==1005:
+        if json_response["code"]==0:
+            self.logger.info("提交验证码成功")
+        elif json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
             raise RuntimeError("检测到此账号在其他客户端登陆")
-        elif json_response["code"]!=0:
-            self.logger.error("提交验证码失败")
         else:
-            self.logger.info("提交验证码成功")
+            msg=self.error_handler(json_response=json_response)
+            self.logger.error("提交验证码失败，错误代码：%d，服务器返回信息：%s" %(json_response["code"],msg))
     def get_option(self,activity_id,question_id,mode_id,n:str,veryfy:bool=False):
         if self.prefix not in ["ssxx"]:
             veryfy=False
@@ -662,29 +665,28 @@ class TestProcessor():
         self.query.last()
         if int(self.query.value(0))!=0:
             self.logger.debug("找到 %d 个的答案" %int(self.query.value(0)))
+            # 答案数应当永远为 1
             if self.query.exec("SELECT ANSWER from 'ALL_ANSWERS' WHERE QUESTION='%s'" %(question))==False:
                 self.logger.error("查询SQL数据库出错，原因：%s" %self.query.lastError().text())
             else:
-                
                 self.query.last()
                 value=self.query.value(0)
                 self.logger.debug("查询得到的值：%s" %value)
-                if "#" in str(value):
-                    return str(value).split("#")
-                else:
-                    return [str(value)]
+                return str(value).split("#")
         else:
             self.logger.debug("未找到答案")
         return []
-    def finish(self,activity_id:str,mode_id:str,race_code:str,n:str):
+    def finish(self,activity_id:str,mode_id:str,race_code:str):
         payload={
             "race_code":race_code
         }
         json_response=self.session.post("https://%s.univs.cn/cgi-bin/race/finish/" %self.prefix,json=payload).json()
         self.logger.debug(json_response)
         if json_response["code"]==4823:
+            n="".join(random.choices(string.ascii_letters+string.digits,k=4))
+            self.check_verify(mode_id=mode_id,n=n)
             self.submit_verify(mode_id=mode_id,n=n)
-            self.finish(activity_id=activity_id,mode_id=mode_id,race_code=race_code,n=n)
+            self.finish(activity_id=activity_id,mode_id=mode_id,race_code=race_code)
         elif json_response["code"]==0:
             owner=json_response["data"]["owner"]
             self.logger.info("执行完成，正确数：%d，答题用时：%d 秒" %(owner["correct_amount"],owner["consume_time"]))
@@ -692,7 +694,7 @@ class TestProcessor():
                 opponent=json_response["data"]["opponent"]
                 self.logger.info("处于对战模式，对方信息：来自 %s 的 %s，正确数 %d，用时 %d秒" %(opponent["univ_name"],opponent["name"],opponent["correct_amount"],opponent["consume_time"]))
         elif json_response["code"]==4831:
-            self.logger.error("答题用时过短")
+            self.logger.warning("答题用时过短")
         elif json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
             raise RuntimeError("检测到此账号在其他客户端登陆")
@@ -702,6 +704,7 @@ class TestProcessor():
         self.logger.debug("正在更新得分情况")
         self.update_info_signal.emit(self.get_user_info())
         if self.expire-time.time()<500:
+            self.logger.warning("Token还有 %d 秒即将过期" %(self.expire-time.time()))
             self.update_token()
     def encrypt_with_pubkey(self,string:str,time_:int=int(time.time())):
         params={"t":time_}
@@ -757,14 +760,13 @@ class TestProcessor():
         self.logger.debug("返回数据：%s" %json_response)
         if json_response["code"]==0:
             self.token=json_response["token"]
-            self.session.headers.update({"Authorize":"Bearer %s" %self.token})
+            self.session.headers.update({"Authorization":"Bearer %s" %self.token})
             self.logger.info("更新Token成功")
             self.expire=self.decode_token()[self.token.split(".")[1]]["exp"]
         elif json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
         else:
-            msg=self.error_handler(json_response=json_response)
-            self.logger.error("更新Token失败,服务器返回信息：%s" %msg)
+            self.logger.error("更新Token失败,服务器返回信息：%s" %self.error_handler(json_response=json_response))
     def decode_token(self,token:str=""):
         # 原理来自https://github.com/deximy/FxxkSsxx
         if token=="":
