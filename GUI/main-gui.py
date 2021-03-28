@@ -383,7 +383,7 @@ class TestProcessor():
             if type(self.conf[key])==dict and "title" in self.conf[key] and "times" in self.conf[key] and self.conf[key]["title"]==title:
                 return int(self.conf[key]["times"])
         return 1
-    def start(self,tray:QSystemTrayIcon,times:int=None):
+    def start(self,tray:QSystemTrayIcon,update_tray:pyqtBoundSignal,times:int=None):
         if QSqlDatabase.contains("qt_sql_default_connection"):
             db=QSqlDatabase.database("qt_sql_default_connection")
         else:
@@ -429,7 +429,9 @@ class TestProcessor():
                     self.logger.debug("key=%s 启用答题睡眠" %key)
                 if enabled==True:
                     for i in range(times):
-                        self.logger.info("正在处理第 %d 次的 %s" %(i+1,title))
+                        msg="正在处理第 %d 次的 %s" %(i+1,title)
+                        self.logger.info(msg)
+                        update_tray.emit(msg)
                         try:
                             self.process(mode_id=key,sleep=sleepflag)
                         except requests.exceptions.ConnectionError as e:
@@ -712,7 +714,7 @@ class TestProcessor():
         pubkey=RSA.import_key(json_response["data"]["public_key"])
         cipher=Cipher.new(pubkey)
         return base64.b64encode(cipher.encrypt(string.encode())).decode()
-    def bootstrap(self,tray:QSystemTrayIcon,times:int=30):
+    def bootstrap(self,update_tray:pyqtBoundSignal,tray:QSystemTrayIcon,times:int=30):
         # 初始化题目数据库，建议使用小号
         if QSqlDatabase.contains("qt_sql_default_connection"):
             db=QSqlDatabase.database("qt_sql_default_connection")
@@ -735,7 +737,9 @@ class TestProcessor():
         try:
             for key in self.ids.keys():
                 for i in range(times):
-                    self.logger.info("正在第 %d 次获取答案数据库" %(i+1))
+                    msg="正在第 %d 次获取答案数据库" %(i+1)
+                    self.logger.info(msg)
+                    update_tray.emit(msg)
                     self.process(mode_id=key,sleep=False)
         except RuntimeError as e:
             self.logger.error("处理过程出现错误")
@@ -793,6 +797,7 @@ class TestProcessor():
         return msg
 class Work(QObject):
     close_dock_signal=pyqtSignal()
+    update_tray=pyqtSignal(str)
     def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,tray:QSystemTrayIcon,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal):
         super().__init__()
         self.finish_signal=finish_signal
@@ -806,15 +811,16 @@ class Work(QObject):
         self.logger.debug("正在启动子线程")
         self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="ssxx")
         self.logger.debug("已实例化四史处理类")
-        self.processor.start(tray=self.tray)
+        self.processor.start(tray=self.tray,update_tray=self.update_tray)
         self.close_dock_signal.emit()
         self.processor_new=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
         self.logger.debug("已实例化党史处理类")
-        self.processor_new.start(tray=self.tray)
+        self.processor_new.start(tray=self.tray,update_tray=self.update_tray)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
 class BootStrap(QObject):
     close_dock_signal=pyqtSignal()
+    update_tray=pyqtSignal(str)
     def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,tray:QSystemTrayIcon,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal,times:int=30):
         super().__init__()
         self.logger=logging.getLogger(__name__)
@@ -829,11 +835,11 @@ class BootStrap(QObject):
         self.logger.debug("正在启动子线程")
         self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="ssxx")
         self.logger.debug("已实例化四史处理类")
-        self.processor.bootstrap(times=self.times,tray=self.tray)
+        self.processor.bootstrap(times=self.times,tray=self.tray,update_tray=self.update_tray)
         self.close_dock_signal.emit()
         self.processor_new=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
         self.logger.debug("已实例化党史处理类")
-        self.processor_new.bootstrap(times=self.times,tray=self.tray)
+        self.processor_new.bootstrap(times=self.times,tray=self.tray,update_tray=self.update_tray)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
 class SettingWindow(QDialog):
@@ -1255,17 +1261,19 @@ class UI(QMainWindow):
         self.setWindowFlag(Qt.WindowFlags.FramelessWindowHint)
         self.setAutoFillBackground(True)
         self.setWindowIcon(QIcon(self.theme.icon))
+        self.setWindowTitle("ChinaUniOnlineGUI")
         self.tray=QSystemTrayIcon()
         self.tray.setIcon(QIcon(self.theme.tray))
-        self.tray.setToolTip("ChinaUniOnlineGUI")
+        self.tray.setToolTip(self.windowTitle()+"\n当前状态：未开始")
         self.tray.activated.connect(self.tray_func)
         self.work=Work(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
         self.work.close_dock_signal.connect(self.close_dock)
+        self.work.update_tray.connect(lambda s: self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s))
         self.work_thread=QThread()
         self.work.moveToThread(self.work_thread)
         self.main_layout=QGridLayout()
         central_widget.setLayout(self.main_layout)
-        self.title=QLabel("ChinaUniOnlineGUI")
+        self.title=QLabel(self.windowTitle())
         self.title.setStyleSheet(self.theme.title)
         self.title.setAlignment(Qt.Alignment.AlignCenter)
         handler.widget.setStyleSheet(self.theme.logger)
@@ -1403,6 +1411,7 @@ class UI(QMainWindow):
         bootstrap_thread=QThread()
         bootstrap=BootStrap(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
         bootstrap.close_dock_signal.connect(self.close_dock)
+        bootstrap.update_tray.connect(lambda s: self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s))
         bootstrap.moveToThread(bootstrap_thread)
         bootstrap_thread.started.connect(bootstrap.start)
         bootstrap_thread.finished.connect(self.finish_bootstrap)
@@ -1450,6 +1459,7 @@ class UI(QMainWindow):
         self.logger.info("执行完成，共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)))
         if self.isVisible()==False:
             self.tray.showMessage("ChinaUniOnline:任务执行完成","共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)),QSystemTrayIcon.MessageIcon.Information)
+        self.tray.setToolTip(self.windowTitle()+"\n当前状态：已完成")
     def show_qr(self,qr:bytes):
         title_label=QLabel("请使用微信扫描小程序码完成登陆")
         title_label.setStyleSheet(self.theme.qr_title)
