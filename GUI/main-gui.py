@@ -1524,7 +1524,8 @@ class UI(QMainWindow):
             conf_writer.write(json.dumps(self.default_conf,indent=4,sort_keys=True,ensure_ascii=False))
         self.logger.info("已生成默认配置文件")
     def close_dock(self):
-        self.removeDockWidget(self.dock)
+        if self.show_user_info==True:
+            self.removeDockWidget(self.dock)
     def mousePressEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标按压事件")
         super().mousePressEvent(event)
