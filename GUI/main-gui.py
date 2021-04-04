@@ -193,10 +193,12 @@ class TestProcessor():
         self.activity_id=json_response["data"]["id"]
         params={"t":str(int(time.time())),"activity_id":self.activity_id}
         json_response=self.session.get("https://%s.univs.cn/cgi-bin/portal/race/mode/" %self.prefix,params=params).json()
+        self.logger.debug("获取的模式数据：%s" %json_response)
         modes=json_response["data"]["modes"]
         self.ids={}
         for mode in modes:
             self.ids[mode["id"]]={"title":mode["title"],"enabled":self.is_enabled(title=mode["title"]),"times":self.times(title=mode["title"])}
+        self.logger.debug("所有的模式设置：%s" %self.ids)
         if self.prefix=="ssxx":
             self.logger.info("已准备处理四史学习内容")
         elif self.prefix=="dsjd":
@@ -383,18 +385,18 @@ class TestProcessor():
     def times(self,title:str):
         for key in self.conf.keys():
             if type(self.conf[key])==dict and "title" in self.conf[key] and "times" in self.conf[key] and self.conf[key]["title"]==title:
+                self.logger.debug("设置的 %s 的次数为：%d" %(title,self.conf[key]["times"]))
                 return int(self.conf[key]["times"])
         return 1
-    def start(self,tray:QSystemTrayIcon,update_tray:pyqtBoundSignal,times:int=None):
-
+    def start(self,tray:QSystemTrayIcon,update_tray:pyqtBoundSignal):
         whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
         # 不应该休眠的模式的白名单列表
         try:
             for key in self.ids.keys():
                 title=self.ids[key]["title"]
                 enabled=self.ids[key]["enabled"]
-                if times==None:
-                    times=self.ids[key]["times"]
+                times=self.ids[key]["times"]
+                self.logger.debug("%s 的执行次数为 %d" %(title,times))
                 if key in whitelist_mode:
                     sleepflag=False
                     self.logger.debug("key=%s 关闭答题睡眠" %key)
