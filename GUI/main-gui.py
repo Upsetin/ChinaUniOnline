@@ -458,7 +458,10 @@ class TestProcessor():
         n="".join(random.choices(population=list(string.digits+string.ascii_letters),k=4))
         # 验证码生成逻辑在js的1713行
         self.logger.debug("生成验证码：%s" %n)
-        verify_pos=self.normal_choice_pos(lst=question_ids)
+        if mode_id=="5f71e934bcdbf3a8c3ba51da":
+            verify_pos=self.normal_choice_pos(lst=question_ids,max_=10)
+        else:
+            verify_pos=self.normal_choice_pos(lst=question_ids)
         for question_id in question_ids:
             if sleep==True:
                 time.sleep(random.uniform(0.1,3.0))
@@ -478,6 +481,10 @@ class TestProcessor():
             else:
                 FailNum=FailNum+1
                 self.logger.info("第 %d 道题目失败" %(i+1))
+            if SuccessNum>=10 and mode_id=="5f71e934bcdbf3a8c3ba51da":
+                # 按照抢十赛规则，只要正确答题10道即可结束。。。
+                self.logger.info("抢十赛数目已达到10，正在终止答题")
+                break
         race_code=json_response["race_code"]
         self.finish(race_code=race_code,activity_id=self.activity_id,mode_id=mode_id)
         self.logger.info("此次成功查询 %d 个题，收录 %d 个题" %(SuccessNum,FailNum))
