@@ -9,7 +9,7 @@ import shutil
 import string
 import logging
 import requests
-import ctypes
+import platform
 import numpy
 from matplotlib import pyplot as plt 
 from matplotlib import use as matplotuse
@@ -25,8 +25,10 @@ from tenacity import retry, wait_random, wait_fixed, retry_if_exception_type, st
 from bs4 import BeautifulSoup
 os.chdir(os.path.split(os.path.realpath(__file__))[0])
 # 将工作目录转移到脚本所在目录，保证下面的相对路径都能正确找到文件
-ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ChinaUniOnlineGUI")
-# 让任务栏图标可以正常显示
+if platform.system()=="Windows":
+    import ctypes
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ChinaUniOnlineGUI")
+    # 让Windows的任务栏图标可以正常显示
 matplotuse("Agg")
 # 让matplotlib使用Agg后端避免Tkinter在非主线程运行的问题
 class SQLException(Exception):
