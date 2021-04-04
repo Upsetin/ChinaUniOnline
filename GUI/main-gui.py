@@ -145,10 +145,11 @@ class QLogger(logging.Handler):
     def scroll_widget_to_bottom(self):
         self.widget.verticalScrollBar().setSliderPosition(self.widget.verticalScrollBar().maximum())
 class TestProcessor():
-    def __init__(self,show_qr_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal,prefix:str="ssxx"):
+    def __init__(self,query:QSqlQuery,show_qr_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal,prefix:str="ssxx"):
         '''答题处理器
         进行自动化答题的处理器类
         参数:
+            query(QSqlQuery):用于查询答案数据
             show_qr_signal(pyqtBoundSgnal):PyQt信号，传递二维码的Bytes用于OAuth登陆，现由于OAuth被服务器废弃，仅保留作为兼容
             close_qr_signal(pyqtBoundSgnal):PyQt信号，无传递数据，用于告诉UI主进程已完成登陆，关闭二维码的显示，现状同上
             user_info_signal(pyqtBoundSgnal):PyQt信号，传递用户数据的dict用于生成用户信息Widget
@@ -164,6 +165,7 @@ class TestProcessor():
         self.user_info_signal=user_info_signal
         self.update_info_signal=update_info_signal
         self.prefix=prefix
+        self.query=query
         self.session=requests.sessions.session()
         default_headers={
             "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36 Edg/88.0.705.74",
@@ -384,37 +386,9 @@ class TestProcessor():
                 return int(self.conf[key]["times"])
         return 1
     def start(self,tray:QSystemTrayIcon,update_tray:pyqtBoundSignal,times:int=None):
-        if QSqlDatabase.contains("qt_sql_default_connection"):
-            db=QSqlDatabase.database("qt_sql_default_connection")
-        else:
-            db=QSqlDatabase.addDatabase("QSQLITE")
-        db.setDatabaseName("answers.db")
-        if db.open()==False:
-            self.logger.error("数据库受损，无法打开")
-            self.logger.debug("详细错误：%s" %db.lastError().text())
-            raise RuntimeError("数据库受损")
-        elif db.transaction()==False:
-            self.logger.error("启动数据库事务失败")
-            self.logger.debug("详细错误：%s" %db.lastError().text())
-            raise RuntimeError("数据库事务启动失败")
-        self.logger.debug("已启动数据库连接")
-        self.query=QSqlQuery(db=db)
+
         whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
         # 不应该休眠的模式的白名单列表
-        tables=db.tables()
-        if "ALL_ANSWERS" not in tables or len(tables)>1:
-            self.logger.info("正在更新数据库到新版文件")
-            shutil.copy("answers.db","answers.db.bak")
-            self.logger.info("旧版数据库备份为answers.db.bak")
-            self.logger.debug("全部旧数据表：%s" %tables)
-            self.query.exec("CREATE TABLE 'ALL_ANSWERS' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)")
-
-            for table in tables:
-                self.logger.debug("正在插入 %s 的旧数据到新表中" %table)
-                self.query.exec("INSERT OR IGNORE INTO 'ALL_ANSWERS' SELECT * FROM '%s'" %table)
-                self.logger.debug("正在删除旧数据表")
-                self.query.exec("DROP TABLE '%s'" %table)
-            db.commit()
         try:
             for key in self.ids.keys():
                 title=self.ids[key]["title"]
@@ -450,15 +424,6 @@ class TestProcessor():
         finally:
             self.session.close()
             self.logger.debug("已关闭Session")
-            self.query.finish()
-            self.query.clear()
-            if db.commit()==True:
-                self.logger.debug("提交数据库更改成功")
-            else:
-                self.logger.error("提交数据库更改失败，正在回滚更改")
-                db.rollback()
-            db.close()
-            self.logger.info("已关闭数据库连接")
             with open(file="config.json",mode="r",encoding="utf-8") as reader:
                 conf=json.loads(reader.read())
             conf["auth"]={"token":self.token,"refresh_token":self.refresh_token,"uid":self.uid}
@@ -716,22 +681,6 @@ class TestProcessor():
         return base64.b64encode(cipher.encrypt(string.encode())).decode()
     def bootstrap(self,update_tray:pyqtBoundSignal,tray:QSystemTrayIcon,times:int=30):
         # 初始化题目数据库，建议使用小号
-        if QSqlDatabase.contains("qt_sql_default_connection"):
-            db=QSqlDatabase.database("qt_sql_default_connection")
-        else:
-            db=QSqlDatabase.addDatabase("QSQLITE")
-        db.setDatabaseName("answers.db")
-        if db.open()==False:
-            self.logger.error("数据库受损，无法打开")
-            self.logger.debug("详细错误：%s" %db.lastError().text())
-            raise RuntimeError("数据库受损")
-        elif db.transaction()==False:
-            self.logger.error("启动数据库事务失败")
-            self.logger.debug("详细错误：%s" %db.lastError().text())
-            raise RuntimeError("数据库事务启动失败")
-        self.logger.debug("已启动数据库连接")
-        self.query=QSqlQuery(db=db)
-        self.query.exec("CREATE TABLE 'ALL_ANSWERS' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)")
         self.logger.info("正在初始化题目数据库，强烈建议使用无关小号登陆")
         self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
         try:
@@ -746,10 +695,6 @@ class TestProcessor():
             self.logger.debug("错误详细内容：%s" %e)
             tray.showMessage("ChinaUniOnlineGUI：错误",str(e),QSystemTrayIcon.MessageIcon.Critical)
         else:
-            self.query.finish()
-            self.query.clear()
-            db.commit()
-            db.close()
             self.logger.info("初始化数据库成功")
     def get_token(self):
         with open(file="config.json",mode="r",encoding="utf-8") as reader:
@@ -798,7 +743,7 @@ class TestProcessor():
 class Work(QObject):
     close_dock_signal=pyqtSignal()
     update_tray=pyqtSignal(str)
-    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,tray:QSystemTrayIcon,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal):
+    def __init__(self,query:QSqlQuery,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,tray:QSystemTrayIcon,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal):
         super().__init__()
         self.finish_signal=finish_signal
         self.show_qr_signal=show_qr_signal
@@ -806,14 +751,15 @@ class Work(QObject):
         self.user_info_signal=user_info_signal
         self.tray=tray
         self.update_info_signal=update_info_signal
+        self.query=query
         self.logger=logging.getLogger(__name__)
     def start(self):
         self.logger.debug("正在启动子线程")
-        self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="ssxx")
+        self.processor=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="ssxx")
         self.logger.debug("已实例化四史处理类")
         self.processor.start(tray=self.tray,update_tray=self.update_tray)
         self.close_dock_signal.emit()
-        self.processor_new=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
+        self.processor_new=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
         self.logger.debug("已实例化党史处理类")
         self.processor_new.start(tray=self.tray,update_tray=self.update_tray)
         self.finish_signal.emit()
@@ -821,7 +767,7 @@ class Work(QObject):
 class BootStrap(QObject):
     close_dock_signal=pyqtSignal()
     update_tray=pyqtSignal(str)
-    def __init__(self,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,tray:QSystemTrayIcon,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal,times:int=30):
+    def __init__(self,query:QSqlQuery,show_qr_signal:pyqtBoundSignal,finish_signal:pyqtBoundSignal,close_qr_signal:pyqtBoundSignal,tray:QSystemTrayIcon,user_info_signal:pyqtBoundSignal,update_info_signal:pyqtBoundSignal,times:int=30):
         super().__init__()
         self.logger=logging.getLogger(__name__)
         self.show_qr_signal=show_qr_signal
@@ -831,13 +777,14 @@ class BootStrap(QObject):
         self.update_info_signal=update_info_signal
         self.times=times
         self.tray=tray
+        self.query=query
     def start(self):
         self.logger.debug("正在启动子线程")
-        self.processor=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="ssxx")
+        self.processor=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="ssxx")
         self.logger.debug("已实例化四史处理类")
         self.processor.bootstrap(times=self.times,tray=self.tray,update_tray=self.update_tray)
         self.close_dock_signal.emit()
-        self.processor_new=TestProcessor(show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
+        self.processor_new=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
         self.logger.debug("已实例化党史处理类")
         self.processor_new.bootstrap(times=self.times,tray=self.tray,update_tray=self.update_tray)
         self.finish_signal.emit()
@@ -1266,11 +1213,6 @@ class UI(QMainWindow):
         self.tray.setIcon(QIcon(self.theme.tray))
         self.tray.setToolTip(self.windowTitle()+"\n当前状态：未开始")
         self.tray.activated.connect(self.tray_func)
-        self.work=Work(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
-        self.work.close_dock_signal.connect(self.close_dock)
-        self.work.update_tray.connect(lambda s: self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s))
-        self.work_thread=QThread()
-        self.work.moveToThread(self.work_thread)
         self.main_layout=QGridLayout()
         central_widget.setLayout(self.main_layout)
         self.title=QLabel(self.windowTitle())
@@ -1317,7 +1259,6 @@ class UI(QMainWindow):
         self.control_min.clicked.connect(self.min_callback)
         self.contron_max.clicked.connect(self.max_callback)
         self.start_button.clicked.connect(self.start_callback)
-        self.work_thread.started.connect(self.work.start)
         self.finish_signal.connect(self.finish_callback)
         self.close_qr_signal.connect(self.close_qr)
         self.control.addWidget(self.control_min)
@@ -1350,9 +1291,10 @@ class UI(QMainWindow):
         tray_menu.setStyleSheet(self.theme.tray_menu)
         self.tray.setContextMenu(tray_menu)
     def update_info_callback(self,info:dict):
-        self.avatar.update_score(score=info["integral"],t_score=info["t_integral"])
-        self.avatar.update_times(times=info["join_times"],t_times=info["t_join_times"])
-        self.avatar.update_avatar(self.draw_pic(info["avatar"]))
+        if self.show_user_info==True:
+            self.avatar.update_score(score=info["integral"],t_score=info["t_integral"])
+            self.avatar.update_times(times=info["join_times"],t_times=info["t_join_times"])
+            self.avatar.update_avatar(self.draw_pic(info["avatar"]))
     def user_info_callback(self,info:dict):
         # info:{"integral":integral,"join_times":join_times,"t_join_times":t_join_times,"t_integral":t_integral,"university_name":university_name,"phone":zip_+" "+mobile,"avatar":avatar}
         self.logger.debug("获取数据：%s" %info)
@@ -1408,8 +1350,24 @@ class UI(QMainWindow):
                 self.setVisible(False)
                 self.tray.setVisible(True)
     def bootstrap(self):
+        if QSqlDatabase.contains("qt_sql_default_connection"):
+            self.db=QSqlDatabase.database("qt_sql_default_connection")
+        else:
+            self.db=QSqlDatabase.addDatabase("QSQLITE")
+        self.db.setDatabaseName("answers.db")
+        if self.db.open()==False:
+            self.logger.error("数据库受损，无法打开")
+            self.logger.debug("详细错误：%s" %self.db.lastError().text())
+            raise RuntimeError("数据库受损")
+        elif self.db.transaction()==False:
+            self.logger.error("启动数据库事务失败")
+            self.logger.debug("详细错误：%s" %self.db.lastError().text())
+            raise RuntimeError("数据库事务启动失败")
+        self.logger.debug("已启动数据库连接")
+        self.query=QSqlQuery(db=self.db)
+        self.query.exec("CREATE TABLE 'ALL_ANSWERS' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)")
         bootstrap_thread=QThread()
-        bootstrap=BootStrap(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
+        bootstrap=BootStrap(query=self.query,show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
         bootstrap.close_dock_signal.connect(self.close_dock)
         bootstrap.update_tray.connect(lambda s: self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s))
         bootstrap.moveToThread(bootstrap_thread)
@@ -1420,8 +1378,14 @@ class UI(QMainWindow):
         self.bootstrap_.setText("执行中...")
         self.start_button.setEnabled(False)
         bootstrap_thread.start()
+        bootstrap_thread.quit()
+        bootstrap_thread.wait()
     def finish_bootstrap(self):
         self.logger.debug("初始化数据库完成")
+        self.query.finish()
+        self.query.clear()
+        self.db.commit()
+        self.db.close()
         self.bootstrap_.setEnabled(True)
         self.bootstrap_.setText("生成题库")
         self.start_button.setEnabled(True)
@@ -1443,7 +1407,41 @@ class UI(QMainWindow):
             self.showNormal()
             self.contron_max.setToolTip("最大化")
     def start_callback(self):
+        if QSqlDatabase.contains("ANSWER_SEARCH"):
+            self.db=QSqlDatabase.database("ANSWER_SEARCH")
+        else:
+            self.db=QSqlDatabase.addDatabase("QSQLITE","ANSWER_SEARCH")
+        self.db.setDatabaseName("answers.db")
+        if self.db.open()==False:
+            self.logger.error("数据库受损，无法打开")
+            self.logger.debug("详细错误：%s" %self.db.lastError().text())
+            raise RuntimeError("数据库受损")
+        elif self.db.transaction()==False:
+            self.logger.error("启动数据库事务失败")
+            self.logger.debug("详细错误：%s" %self.db.lastError().text())
+            raise RuntimeError("数据库事务启动失败")
+        self.logger.debug("已启动数据库连接")
+        self.query=QSqlQuery(db=self.db)
+        tables=self.db.tables()
+        if "ALL_ANSWERS" not in tables or len(tables)>1:
+            self.logger.info("正在更新数据库到新版文件")
+            shutil.copy("answers.db","answers.db.bak")
+            self.logger.info("旧版数据库备份为answers.db.bak")
+            self.logger.debug("全部旧数据表：%s" %tables)
+            self.query.exec("CREATE TABLE 'ALL_ANSWERS' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)")
+            for table in tables:
+                self.logger.debug("正在插入 %s 的旧数据到新表中" %table)
+                self.query.exec("INSERT OR IGNORE INTO 'ALL_ANSWERS' SELECT * FROM '%s'" %table)
+                self.logger.debug("正在删除旧数据表")
+                self.query.exec("DROP TABLE '%s'" %table)
+            self.db.commit()
         self.start_time=time.time()
+        self.work=Work(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,query=self.query)
+        self.work.close_dock_signal.connect(self.close_dock)
+        self.work.update_tray.connect(lambda s: self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s))
+        self.work_thread=QThread()
+        self.work.moveToThread(self.work_thread)
+        self.work_thread.started.connect(self.work.start)
         self.work_thread.start()
         self.start_button.setEnabled(False)
         if self.bootstrap_.isEnabled()==True:
@@ -1453,6 +1451,19 @@ class UI(QMainWindow):
         self.start_button.setEnabled(True)
         self.bootstrap_.setEnabled(False)
         self.start_button.setText("开始(&S)")
+        self.work_thread.quit()
+        self.work_thread.wait()
+        if self.show_user_info==True:
+            self.close_dock()
+        self.query.finish()
+        self.query.clear()
+        if self.db.commit()==True:
+            self.logger.debug("提交数据库更改成功")
+        else:
+            self.logger.error("提交数据库更改失败，正在回滚更改")
+            self.db.rollback()
+        self.db.close()
+        self.logger.info("已关闭数据库连接")
         passed_time=time.time()-self.start_time
         mins,secs=divmod(passed_time,60)
         hours,mins=divmod(mins,60)
