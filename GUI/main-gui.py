@@ -1141,8 +1141,8 @@ class UI(QMainWindow):
         self.setCentralWidget(central_widget)
         self.logger=logging.getLogger(__name__)
         filehandler=logging.FileHandler(filename="logs.log",mode="w",encoding="utf-8")
-        handler=QLogger(update_signal=self.update_signal)
-        handler.setLevel(logging.INFO)
+        self.handler=QLogger(update_signal=self.update_signal)
+        self.handler.setLevel(logging.INFO)
         filehandler.setLevel(logging.INFO)
         self.logger.setLevel(logging.INFO)
         self.default_conf={
@@ -1200,7 +1200,7 @@ class UI(QMainWindow):
             conf=json.loads(conf_reader.read())
         debug=bool(conf["debug"])
         if debug==True:
-            handler.setLevel(logging.DEBUG)
+            self.handler.setLevel(logging.DEBUG)
             filehandler.setLevel(logging.DEBUG)
             self.logger.setLevel(logging.DEBUG)
         try:
@@ -1209,9 +1209,9 @@ class UI(QMainWindow):
             self.theme=self.Theme()
         self.setStyleSheet(self.theme.main)
         formatter=logging.Formatter(fmt=self.theme.logging_fmt,datefmt=self.theme.logging_datefmt)
-        handler.setFormatter(formatter)
+        self.handler.setFormatter(formatter)
         filehandler.setFormatter(formatter)
-        self.logger.addHandler(handler)
+        self.logger.addHandler(self.handler)
         self.logger.addHandler(filehandler)
         self.resize(self.theme.size[0],self.theme.size[1])
         self.setWindowOpacity(self.theme.opacity)
@@ -1229,7 +1229,7 @@ class UI(QMainWindow):
         self.title=QLabel(self.windowTitle())
         self.title.setStyleSheet(self.theme.title)
         self.title.setAlignment(Qt.Alignment.AlignCenter)
-        handler.widget.setStyleSheet(self.theme.logger)
+        self.handler.widget.setStyleSheet(self.theme.logger)
         self.control=QVBoxLayout()
         self.control_close=QPushButton()
         self.control_close.setToolTip("关闭")
@@ -1280,9 +1280,9 @@ class UI(QMainWindow):
         self.main_layout.addLayout(self.control,0,0)
         self.main_layout.addWidget(self.title,0,1)
         self.main_layout.addLayout(start,0,2)
-        self.main_layout.addWidget(handler.widget,1,1,1,2)
-        self.update_signal.connect(handler.widget.appendPlainText)
-        handler.widget.textChanged.connect(handler.scroll_widget_to_bottom)
+        self.main_layout.addWidget(self.handler.widget,1,1,1,2)
+        self.update_signal.connect(self.handler.widget.appendPlainText)
+        self.handler.widget.textChanged.connect(self.handler.scroll_widget_to_bottom)
         self.show_qr_signal.connect(self.show_qr)
         self.user_info_signal.connect(self.user_info_callback)
         self.update_info_signal.connect(self.update_info_callback)
@@ -1354,17 +1354,18 @@ class UI(QMainWindow):
     def tray_func(self,reason:QSystemTrayIcon.ActivationReason):
         if reason==QSystemTrayIcon.ActivationReason.DoubleClick:
             if self.isHidden()==True:
-                self.setVisible(True)
                 self.tray.setVisible(False)
+                self.handler.scroll_widget_to_bottom()
+                self.setVisible(True)
                 self.setFocus()
             else:
                 self.setVisible(False)
                 self.tray.setVisible(True)
     def bootstrap(self):
-        if QSqlDatabase.contains("qt_sql_default_connection"):
-            self.db=QSqlDatabase.database("qt_sql_default_connection")
+        if QSqlDatabase.contains("ANSWER_SEARCH"):
+            self.db=QSqlDatabase.database("ANSWER_SEARCH")
         else:
-            self.db=QSqlDatabase.addDatabase("QSQLITE")
+            self.db=QSqlDatabase.addDatabase("QSQLITE","ANSWER_SEARCH")
         self.db.setDatabaseName("answers.db")
         if self.db.open()==False:
             self.logger.error("数据库受损，无法打开")
