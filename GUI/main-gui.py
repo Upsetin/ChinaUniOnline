@@ -1317,6 +1317,7 @@ class UI(QMainWindow):
             self.dock.setWidget(self.avatar)
             self.dock.setStyleSheet(self.theme.dock)
             self.addDockWidget(Qt.DockWidgetAreas.RightDockWidgetArea,self.dock)
+            self.resize(self.width()+self.dock.width(),self.height())
     def draw_pic(self,data:list):
         self.logger.debug("获取图片信息：%s" %data)
         titles=list()
@@ -1538,6 +1539,7 @@ class UI(QMainWindow):
     def close_dock(self):
         if self.show_user_info==True:
             self.removeDockWidget(self.dock)
+            self.resize(self.theme.size[0],self.theme.size[1])
     def mousePressEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标按压事件")
         super().mousePressEvent(event)
