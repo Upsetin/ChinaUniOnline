@@ -390,13 +390,19 @@ class TestProcessor():
                 self.logger.debug("设置的 %s 的次数为：%d" %(title,self.conf[key]["times"]))
                 return int(self.conf[key]["times"])
         return 1
-    def start(self,tray:QSystemTrayIcon,update_tray:pyqtBoundSignal):
+    def start(self,tray:QSystemTrayIcon,update_tray:pyqtBoundSignal,times:int=-1,bootstrap:bool=False):
         whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
         # 不应该休眠的模式的白名单列表
         process_stat=list()
+        if bootstrap==True:
+            # 初始化题目数据库，建议此时使用小号以避免污染答题记录
+            self.logger.info("正在初始化题目数据库，强烈建议使用无关小号登陆")
+            self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
         for key in self.ids.keys():
+            if times==-1:
+                times=self.ids[key]["times"]
             if self.ids[key]["enabled"]==True:
-                process_stat.append({"title":self.ids[key]["title"],"mode_id":key,"times":self.ids[key]["times"],"status":0})
+                process_stat.append({"title":self.ids[key]["title"],"mode_id":key,"times":times,"status":0})
             else:
                 self.logger.info("%s 已跳过" %self.ids[key]["title"])
         self.logger.debug("准备处理的项目列表：%s" %process_stat)
@@ -698,42 +704,6 @@ class TestProcessor():
         pubkey=RSA.import_key(json_response["data"]["public_key"])
         cipher=Cipher.new(pubkey)
         return base64.b64encode(cipher.encrypt(string.encode())).decode()
-    def bootstrap(self,update_tray:pyqtBoundSignal,tray:QSystemTrayIcon,times:int=30):
-        # 初始化题目数据库，建议使用小号
-        whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
-        self.logger.info("正在初始化题目数据库，强烈建议使用无关小号登陆")
-        self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
-        process_stat=list()
-        try:
-            for key in self.ids.keys():
-                process_stat.append({"title":self.ids[key]["title"],"mode_id":key,"status":0})
-            while True:
-                if process_stat==[]:
-                    self.logger.info("所有任务已完成")
-                    break
-                target=random.choice(process_stat)
-                msg="正在第 %d 次获取答案数据库" %(target["status"]+1)
-                self.logger.info(msg)
-                update_tray.emit(msg)
-                try:
-                    if target["mode_id"] in whitelist_mode:
-                        self.process(mode_id=target["mode_id"],sleep=False)
-                    else:
-                        self.process(mode_id=target["mode_id"],sleep=True)
-                except requests.exceptions.ConnectionError as e:
-                    self.logger.error("和服务器通信出错")
-                    self.logger.debug("第 %d 次执行失败，错误详细内容：%s" %(target["status"]+1,e))
-                else:
-                    self.logger.debug("第 %d 次执行成功" %(target["status"]+1))
-                    target["status"]=target["status"]+1
-                    if target["status"]>=times:
-                        process_stat.remove(target)
-        except RuntimeError as e:
-            self.logger.error("处理过程出现错误")
-            self.logger.debug("错误详细内容：%s" %e)
-            tray.showMessage("ChinaUniOnlineGUI：错误",str(e),QSystemTrayIcon.MessageIcon.Critical)
-        else:
-            self.logger.info("初始化数据库成功")
     def get_token(self):
         with open(file="config.json",mode="r",encoding="utf-8") as reader:
             conf=json.loads(reader.read())
@@ -820,11 +790,11 @@ class BootStrap(QObject):
         self.logger.debug("正在启动子线程")
         self.processor=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="ssxx")
         self.logger.debug("已实例化四史处理类")
-        self.processor.bootstrap(times=self.times,tray=self.tray,update_tray=self.update_tray)
+        self.processor.start(times=self.times,tray=self.tray,update_tray=self.update_tray,bootstrap=True)
         self.close_dock_signal.emit()
         self.processor_new=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
         self.logger.debug("已实例化党史处理类")
-        self.processor_new.bootstrap(times=self.times,tray=self.tray,update_tray=self.update_tray)
+        self.processor_new.start(times=self.times,tray=self.tray,update_tray=self.update_tray,bootstrap=True)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
 class SettingWindow(QDialog):
@@ -1567,6 +1537,20 @@ class UI(QMainWindow):
         if self.show_user_info==True:
             self.removeDockWidget(self.dock)
             self.resize(self.theme.size[0],self.theme.size[1])
+    def close(self) -> bool:
+        if QSqlDatabase.contains("ANSWER_SEARCH")==True:
+            db=QSqlDatabase.database("ANSWER_SEARCH")
+            if db.commit()==True:
+                self.logger.debug("提交数据库更改成功")
+            elif db.rollback()==True:
+                self.logger.debug("已回滚数据库更改")
+            else:
+                self.logger.warning("未成功保存数据库，答案信息可能有损失")
+            db.close()
+            self.logger.debug("已关闭未关闭的数据库连接")
+        else:
+            self.logger.debug("无未关闭的数据库连接")
+        return super().close()
     def mousePressEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标按压事件")
         super().mousePressEvent(event)
