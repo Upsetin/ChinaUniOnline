@@ -405,36 +405,37 @@ class TestProcessor():
                 process_stat.append({"title":self.ids[key]["title"],"mode_id":key,"times":times,"status":0})
             else:
                 self.logger.info("%s 已跳过" %self.ids[key]["title"])
-        self.logger.debug("准备处理的项目列表：%s" %process_stat)
         try:
             while True:
                 if process_stat==[]:
                     self.logger.info("全部项目已完成处理")
                     break
-                target=random.choice(process_stat)
-                self.logger.debug("选中的项目：%s" %target)
-                if target["mode_id"] in whitelist_mode:
+                self.logger.debug("准备处理的项目列表：%s" %process_stat)
+                pos=random.randint(0,len(process_stat)-1)
+                self.logger.debug("选中的项目：%s" %process_stat[pos])
+                if process_stat[pos]["mode_id"] in whitelist_mode:
                     sleepflag=False
-                    self.logger.debug("项目 %s 关闭答题睡眠" %target["title"])
+                    self.logger.debug("项目 %s 关闭答题睡眠" %process_stat[pos]["title"])
                 else:
                     sleepflag=True
-                    self.logger.debug("项目 %s 启用答题睡眠" %target["title"])
-                msg="正在处理第 %d 次的 %s" %(target["status"]+1,target["title"])
+                    self.logger.debug("项目 %s 启用答题睡眠" %process_stat[pos]["title"])
+                msg="正在处理第 %d 次的 %s" %(process_stat[pos]["status"]+1,process_stat[pos]["title"])
                 self.logger.info(msg)
                 update_tray.emit(msg)
                 try:
-                    self.process(mode_id=target["mode_id"],sleep=sleepflag)
+                    self.process(mode_id=process_stat[pos]["mode_id"],sleep=sleepflag)
                 except requests.exceptions.ConnectionError as e:
                     self.logger.error("和服务器通信出错")
-                    self.logger.debug("第 %d 次执行失败，错误详细内容：%s" %(target["status"]+1,e))
+                    self.logger.debug("第 %d 次执行失败，错误详细内容：%s" %(process_stat[pos]["status"]+1,e))
                 else:
-                    self.logger.debug("第 %d 次执行成功" %(target["status"]+1))
-                    target["status"]=target["status"]+1
-                    if target["status"]>=target["times"]:
-                        self.logger.debug("项目 %s 已完成，正在从列表中移除" %target["title"])
-                        process_stat.remove(target)
+                    self.logger.debug("第 %d 次执行成功" %(process_stat[pos]["status"]+1))
+                    process_stat[pos]["status"]=process_stat[pos]["status"]+1
+                    self.logger.debug("已更新处理列表")
+                    if process_stat[pos]["status"]>=process_stat[pos]["times"]:
+                        self.logger.debug("项目 %s 已完成，正在从列表中移除" %process_stat[pos]["title"])
+                        process_stat.remove(process_stat[pos])
                     else:
-                        self.logger.debug("项目 %s 有效，将加入处理过程" %target["title"])
+                        self.logger.debug("项目 %s 有效，仍将加入处理过程" %process_stat[pos]["title"])
         except RuntimeError as e_r:
             self.logger.error("处理过程中出现错误")
             self.logger.debug("错误详细内容：%s" %e_r)
