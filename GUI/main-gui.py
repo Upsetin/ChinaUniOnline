@@ -393,38 +393,46 @@ class TestProcessor():
     def start(self,tray:QSystemTrayIcon,update_tray:pyqtBoundSignal):
         whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
         # 不应该休眠的模式的白名单列表
+        process_stat=list()
+        for key in self.ids.keys():
+            if self.ids[key]["enabled"]==True:
+                process_stat.append({"title":self.ids[key]["title"],"mode_id":key,"times":self.ids[key]["times"],"status":0})
+            else:
+                self.logger.info("%s 已跳过" %self.ids[key]["title"])
+        self.logger.debug("准备处理的项目列表：%s" %process_stat)
         try:
-            for key in self.ids.keys():
-                title=self.ids[key]["title"]
-                enabled=self.ids[key]["enabled"]
-                times=self.ids[key]["times"]
-                self.logger.debug("%s 的执行次数为 %d" %(title,times))
-                if key in whitelist_mode:
+            while True:
+                if process_stat==[]:
+                    self.logger.info("全部项目已完成处理")
+                    break
+                target=random.choice(process_stat)
+                self.logger.debug("选中的项目：%s" %target)
+                if target["mode_id"] in whitelist_mode:
                     sleepflag=False
-                    self.logger.debug("key=%s 关闭答题睡眠" %key)
+                    self.logger.debug("项目 %s 关闭答题睡眠" %target["title"])
                 else:
                     sleepflag=True
-                    self.logger.debug("key=%s 启用答题睡眠" %key)
-                if enabled==True:
-                    for i in range(times):
-                        msg="正在处理第 %d 次的 %s" %(i+1,title)
-                        self.logger.info(msg)
-                        update_tray.emit(msg)
-                        try:
-                            self.process(mode_id=key,sleep=sleepflag)
-                        except requests.exceptions.ConnectionError as e:
-                            self.logger.error("和服务器通信出错")
-                            self.logger.debug("第 %d 次执行失败，错误详细内容：%s" %(i+1,e))
-                        else:
-                            self.logger.debug("第 %d 次执行成功" %(i+1))
+                    self.logger.debug("项目 %s 启用答题睡眠" %target["title"])
+                msg="正在处理第 %d 次的 %s" %(target["status"]+1,target["title"])
+                self.logger.info(msg)
+                update_tray.emit(msg)
+                try:
+                    self.process(mode_id=target["mode_id"],sleep=sleepflag)
+                except requests.exceptions.ConnectionError as e:
+                    self.logger.error("和服务器通信出错")
+                    self.logger.debug("第 %d 次执行失败，错误详细内容：%s" %(target["status"]+1,e))
                 else:
-                    self.logger.info("%s 已跳过" %title)
-        except RuntimeError as e:
+                    self.logger.debug("第 %d 次执行成功" %(target["status"]+1))
+                    target["status"]=target["status"]+1
+                    if target["status"]>=target["times"]:
+                        self.logger.debug("项目 %s 已完成，正在从列表中移除" %target["title"])
+                        process_stat.remove(target)
+                    else:
+                        self.logger.debug("项目 %s 有效，将加入处理过程" %target["title"])
+        except RuntimeError as e_r:
             self.logger.error("处理过程中出现错误")
-            self.logger.debug("错误详细内容：%s" %e)
-            tray.showMessage("ChineUniOnlineGUI：错误",str(e),QSystemTrayIcon.MessageIcon.Critical)
-        else:
-            self.logger.info("所有任务均正常完成")
+            self.logger.debug("错误详细内容：%s" %e_r)
+            tray.showMessage("ChineUniOnlineGUI：错误",str(e_r),QSystemTrayIcon.MessageIcon.Critical)
         finally:
             self.session.close()
             self.logger.debug("已关闭Session")
@@ -692,15 +700,34 @@ class TestProcessor():
         return base64.b64encode(cipher.encrypt(string.encode())).decode()
     def bootstrap(self,update_tray:pyqtBoundSignal,tray:QSystemTrayIcon,times:int=30):
         # 初始化题目数据库，建议使用小号
+        whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
         self.logger.info("正在初始化题目数据库，强烈建议使用无关小号登陆")
         self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
+        process_stat=list()
         try:
             for key in self.ids.keys():
-                for i in range(times):
-                    msg="正在第 %d 次获取答案数据库" %(i+1)
-                    self.logger.info(msg)
-                    update_tray.emit(msg)
-                    self.process(mode_id=key,sleep=False)
+                process_stat.append({"title":self.ids[key]["title"],"mode_id":key,"status":0})
+            while True:
+                if process_stat==[]:
+                    self.logger.info("所有任务已完成")
+                    break
+                target=random.choice(process_stat)
+                msg="正在第 %d 次获取答案数据库" %(target["status"]+1)
+                self.logger.info(msg)
+                update_tray.emit(msg)
+                try:
+                    if target["mode_id"] in whitelist_mode:
+                        self.process(mode_id=target["mode_id"],sleep=False)
+                    else:
+                        self.process(mode_id=target["mode_id"],sleep=True)
+                except requests.exceptions.ConnectionError as e:
+                    self.logger.error("和服务器通信出错")
+                    self.logger.debug("第 %d 次执行失败，错误详细内容：%s" %(target["status"]+1,e))
+                else:
+                    self.logger.debug("第 %d 次执行成功" %(target["status"]+1))
+                    target["status"]=target["status"]+1
+                    if target["status"]>=times:
+                        process_stat.remove(target)
         except RuntimeError as e:
             self.logger.error("处理过程出现错误")
             self.logger.debug("错误详细内容：%s" %e)
