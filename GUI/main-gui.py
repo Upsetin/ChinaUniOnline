@@ -393,11 +393,13 @@ class TestProcessor():
     def start(self,tray:QSystemTrayIcon,update_tray:pyqtBoundSignal,times:int=-1,bootstrap:bool=False):
         whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
         # 不应该休眠的模式的白名单列表
-        process_stat=list()
         if bootstrap==True:
             # 初始化题目数据库，建议此时使用小号以避免污染答题记录
             self.logger.info("正在初始化题目数据库，强烈建议使用无关小号登陆")
             self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
+        process_stat=list()
+        randomrize=self.conf["randomrize"]
+        self.logger.debug("随机化处理顺序设置：%s" %randomrize)
         for key in self.ids.keys():
             if times==-1:
                 times=self.ids[key]["times"]
@@ -405,36 +407,40 @@ class TestProcessor():
                 process_stat.append({"title":self.ids[key]["title"],"mode_id":key,"times":times,"status":0})
             else:
                 self.logger.info("%s 已跳过" %self.ids[key]["title"])
-        self.logger.debug("准备处理的项目列表：%s" %process_stat)
         try:
             while True:
                 if process_stat==[]:
                     self.logger.info("全部项目已完成处理")
                     break
-                target=random.choice(process_stat)
-                self.logger.debug("选中的项目：%s" %target)
-                if target["mode_id"] in whitelist_mode:
+                self.logger.debug("准备处理的项目列表：%s" %process_stat)
+                if randomrize==True:
+                    pos=random.randint(0,len(process_stat)-1)
+                else:
+                    pos=0
+                self.logger.debug("选中的项目：%s" %process_stat[pos])
+                if process_stat[pos]["mode_id"] in whitelist_mode:
                     sleepflag=False
-                    self.logger.debug("项目 %s 关闭答题睡眠" %target["title"])
+                    self.logger.debug("项目 %s 关闭答题睡眠" %process_stat[pos]["title"])
                 else:
                     sleepflag=True
-                    self.logger.debug("项目 %s 启用答题睡眠" %target["title"])
-                msg="正在处理第 %d 次的 %s" %(target["status"]+1,target["title"])
+                    self.logger.debug("项目 %s 启用答题睡眠" %process_stat[pos]["title"])
+                msg="正在处理第 %d 次的 %s" %(process_stat[pos]["status"]+1,process_stat[pos]["title"])
                 self.logger.info(msg)
                 update_tray.emit(msg)
                 try:
-                    self.process(mode_id=target["mode_id"],sleep=sleepflag)
+                    self.process(mode_id=process_stat[pos]["mode_id"],sleep=sleepflag)
                 except requests.exceptions.ConnectionError as e:
                     self.logger.error("和服务器通信出错")
-                    self.logger.debug("第 %d 次执行失败，错误详细内容：%s" %(target["status"]+1,e))
+                    self.logger.debug("第 %d 次执行失败，错误详细内容：%s" %(process_stat[pos]["status"]+1,e))
                 else:
-                    self.logger.debug("第 %d 次执行成功" %(target["status"]+1))
-                    target["status"]=target["status"]+1
-                    if target["status"]>=target["times"]:
-                        self.logger.debug("项目 %s 已完成，正在从列表中移除" %target["title"])
-                        process_stat.remove(target)
+                    self.logger.debug("第 %d 次执行成功" %(process_stat[pos]["status"]+1))
+                    process_stat[pos]["status"]=process_stat[pos]["status"]+1
+                    self.logger.debug("已更新处理列表")
+                    if process_stat[pos]["status"]>=process_stat[pos]["times"]:
+                        self.logger.debug("项目 %s 已完成，正在从列表中移除" %process_stat[pos]["title"])
+                        process_stat.remove(process_stat[pos])
                     else:
-                        self.logger.debug("项目 %s 有效，将加入处理过程" %target["title"])
+                        self.logger.debug("项目 %s 有效，仍将加入处理过程" %process_stat[pos]["title"])
         except RuntimeError as e_r:
             self.logger.error("处理过程中出现错误")
             self.logger.debug("错误详细内容：%s" %e_r)
@@ -914,7 +920,12 @@ class SettingWindow(QDialog):
         show_user_info.setToolTip("是否在获取用户信息后显示到程序界面上")
         show_user_info.setStyleSheet(theme["check_box"])
         show_user_info.setObjectName("show_user_info")
-        for widget in [proxy,theme_group,debug_check,way,hide,show_user_info,auth]:
+        randomrize=QCheckBox("随机化处理顺序")
+        randomrize.setChecked(self.conf["randomrize"])
+        randomrize.setToolTip("是否随机化不同项目的处理顺序")
+        randomrize.setStyleSheet(theme["check_box"])
+        randomrize.setObjectName("randomrize")
+        for widget in [proxy,theme_group,debug_check,way,hide,show_user_info,randomrize,auth]:
             self.content.addWidget(widget,x,y)
             self.logger.debug("已添加额外部件 %s 于(%d,%d)" %(widget.objectName(),x,y))
             if y+1>=self.shape:
@@ -1150,6 +1161,7 @@ class UI(QMainWindow):
             "hide":False,
             "show_user_info":True,
             "font_prop":"SimSun",
+            "randomrize":True,
             "auth":{
                 "token":"",
                 "refresh_token":"",
