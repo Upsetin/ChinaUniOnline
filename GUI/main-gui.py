@@ -486,7 +486,7 @@ class TestProcessor():
             verify_pos=self.normal_choice_pos(lst=question_ids)
         for question_id in question_ids:
             if sleep==True:
-                time.sleep(random.uniform(0.1,3.0))
+                time.sleep(random.uniform(0.1,1.5))
                 # 随机休眠一段时间尝试规避速度过快导致的服务器警告
             else:
                 time.sleep(random.uniform(0.1,0.5))
@@ -510,10 +510,10 @@ class TestProcessor():
         race_code=json_response["race_code"]
         self.finish(race_code=race_code,activity_id=self.activity_id,mode_id=mode_id)
         self.logger.info("此次成功查询 %d 个题，收录 %d 个题" %(SuccessNum,FailNum))
-    def normal_choice_pos(self,lst:list,max_:int=None):
+    def normal_choice_pos(self,lst:list,max_:int=-1):
         mu=(len(lst)-1)/2
         sigma=len(lst)/6
-        if max_==None:
+        if max_==-1:
             max_=len(lst)-1
         while True:
             index=int(random.normalvariate(mu=mu,sigma=sigma))
