@@ -393,11 +393,13 @@ class TestProcessor():
     def start(self,tray:QSystemTrayIcon,update_tray:pyqtBoundSignal,times:int=-1,bootstrap:bool=False):
         whitelist_mode=["5f71e934bcdbf3a8c3ba51d9","5f71e934bcdbf3a8c3ba51da"]
         # 不应该休眠的模式的白名单列表
-        process_stat=list()
         if bootstrap==True:
             # 初始化题目数据库，建议此时使用小号以避免污染答题记录
             self.logger.info("正在初始化题目数据库，强烈建议使用无关小号登陆")
             self.logger.info("每个挑战将刷 %d 次以获得足够的数据" %times)
+        process_stat=list()
+        randomrize=self.conf["randomrize"]
+        self.logger.debug("随机化处理顺序设置：%s" %randomrize)
         for key in self.ids.keys():
             if times==-1:
                 times=self.ids[key]["times"]
@@ -411,7 +413,10 @@ class TestProcessor():
                     self.logger.info("全部项目已完成处理")
                     break
                 self.logger.debug("准备处理的项目列表：%s" %process_stat)
-                pos=random.randint(0,len(process_stat)-1)
+                if randomrize==True:
+                    pos=random.randint(0,len(process_stat)-1)
+                else:
+                    pos=0
                 self.logger.debug("选中的项目：%s" %process_stat[pos])
                 if process_stat[pos]["mode_id"] in whitelist_mode:
                     sleepflag=False
@@ -915,7 +920,12 @@ class SettingWindow(QDialog):
         show_user_info.setToolTip("是否在获取用户信息后显示到程序界面上")
         show_user_info.setStyleSheet(theme["check_box"])
         show_user_info.setObjectName("show_user_info")
-        for widget in [proxy,theme_group,debug_check,way,hide,show_user_info,auth]:
+        randomrize=QCheckBox("随机化处理顺序")
+        randomrize.setChecked(self.conf["randomrize"])
+        randomrize.setToolTip("是否随机化不同项目的处理顺序")
+        randomrize.setStyleSheet(theme["check_box"])
+        randomrize.setObjectName("randomrize")
+        for widget in [proxy,theme_group,debug_check,way,hide,show_user_info,randomrize,auth]:
             self.content.addWidget(widget,x,y)
             self.logger.debug("已添加额外部件 %s 于(%d,%d)" %(widget.objectName(),x,y))
             if y+1>=self.shape:
@@ -1151,6 +1161,7 @@ class UI(QMainWindow):
             "hide":False,
             "show_user_info":True,
             "font_prop":"SimSun",
+            "randomrize":True,
             "auth":{
                 "token":"",
                 "refresh_token":"",
