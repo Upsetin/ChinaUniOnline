@@ -82,6 +82,8 @@ class ProcessorModule():
                 self.params[key]=self.handle_string(data=self.params[key],msg=smsg)
             for key in self.json_.keys():
                 self.json_[key]=self.handle_string(data=self.json_[key],msg=smsg)
+            for key in self.data_.keys():
+                self.data_[key]=self.handle_string(data=self.data_[key],msg=smsg)
 class SQLException(Exception):
     def __init__(self,*args):
         super().__init__(*args)
