@@ -53,6 +53,10 @@ class ProcessorModule():
                     self.json_=self.data["json"]
                 else:
                     self.json_={}
+                if "data" in self.data.keys():
+                    self.data_=self.data["data"]
+                else:
+                    self.data_={}
             else:
                 self.logger.debug("不支持的模块类型")
                 raise ModuleLoadError("不支持的模块类型")
@@ -530,7 +534,8 @@ class TestProcessor():
                 if mod.mod_type=="notifier":
                     self.logger.debug("已加载通知服务模块：%s" %mod.name)
                     mod.parse(smsg=smsg)
-                    self.logger.debug("服务器回复：%s" %self.session.request(method=mod.method,url=mod.api,params=mod.params,json=mod.json_).json())
+                    json_resp=self.session.request(method=mod.method,url=mod.api,params=mod.params,json=mod.json_,data=mod.data_).json()
+                    self.logger.debug("服务器回复：%s" %json_resp)
                     self.logger.info("已发送远程通知。")
                 else:
                     self.logger.error("模块 %s 属于不支持的模块类型" %mod.name)
