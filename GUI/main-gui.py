@@ -135,7 +135,7 @@ class UserAvatar(QWidget):
         self.score_label.setAlignment(Qt.Alignment.AlignCenter)
         self.school_label=QLabel("学校：%s" %school)
         self.school_label.setAlignment(Qt.Alignment.AlignCenter)
-        self.times_label=QLabel("答题次数:%d\n团队答题次数：%d" %(times,t_times))
+        self.times_label=QLabel("答题次数：%d\n团队答题次数：%d" %(times,t_times))
         self.times_label.setAlignment(Qt.Alignment.AlignCenter)
         info.addWidget(self.name_label)
         info.addWidget(self.province_label)
@@ -528,6 +528,7 @@ class TestProcessor():
             with open(file="config.json",mode="w",encoding="utf-8") as writer:
                 writer.write(json.dumps(conf,sort_keys=True,indent=4,ensure_ascii=False))
             self.logger.debug("已更新Token数据供下次使用")
+    def send_msg(self):
         smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
         for mod in self.modules:
             self.logger.debug("模块数据：%s" %mod.data)
@@ -862,11 +863,12 @@ class Work(QObject):
         self.logger.debug("已实例化四史处理类")
         self.processor.start(tray=self.tray,update_tray=self.update_tray)
         self.close_dock_signal.emit()
-        self.processor_new=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
+        self.processor=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
         self.logger.debug("已实例化党史处理类")
-        self.processor_new.start(tray=self.tray,update_tray=self.update_tray)
+        self.processor.start(tray=self.tray,update_tray=self.update_tray)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
+        self.processor.send_msg()
 class BootStrap(QObject):
     close_dock_signal=pyqtSignal()
     update_tray=pyqtSignal(str)
@@ -887,11 +889,12 @@ class BootStrap(QObject):
         self.logger.debug("已实例化四史处理类")
         self.processor.start(times=self.times,tray=self.tray,update_tray=self.update_tray,bootstrap=True)
         self.close_dock_signal.emit()
-        self.processor_new=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
+        self.processor=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
         self.logger.debug("已实例化党史处理类")
-        self.processor_new.start(times=self.times,tray=self.tray,update_tray=self.update_tray,bootstrap=True)
+        self.processor.start(times=self.times,tray=self.tray,update_tray=self.update_tray,bootstrap=True)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
+        self.processor.send_msg()
 class SettingWindow(QDialog):
     def __init__(self,parent:QWidget,theme:dict):
         super().__init__()
