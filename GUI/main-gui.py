@@ -31,7 +31,57 @@ if platform.system()=="Windows":
     # 让Windows的任务栏图标可以正常显示
 matplotuse("Agg")
 # 让matplotlib使用Agg后端避免Tkinter在非主线程运行的问题
+class ProcessorModule():
+    def __init__(self,data:dict):
+        super().__init__()
+        try:
+            self.logger=logging.getLogger(__name__)
+            self.data=data
+            self.name=self.data["name"]
+            self.mod_type=self.data["type"]
+            self.author=self.data["author"]
+            self.enabled=self.data["enabled"]
+            if self.mod_type=="notifier":
+                self.api=self.data["api"]
+                self.token=self.data["token"]
+                self.method=self.data["method"]
+                if "params" in self.data.keys():
+                    self.params=self.data["params"]
+                else:
+                    self.params={}
+                if "json" in self.data.keys():
+                    self.json_=self.data["json"]
+                else:
+                    self.json_={}
+            else:
+                self.logger.debug("不支持的模块类型")
+                raise ModuleLoadError("不支持的模块类型")
+        except KeyError:
+            self.logger.debug("模块 %s 格式有误" %self.name)
+            raise ModuleLoadError("模块格式有误")
+        except Exception as e:
+            self.logger.debug("模块 %s 加载过程中出现错误：%s" %(self.name,e))
+            raise ModuleLoadError("模块加载出错")
+        else:
+            self.logger.debug("模块 %s 加载成功" %self.name)
+    def handle_string(self,data:str,msg:str):
+        params=dict()
+        if "{token}" in data:
+            params["token"]=self.token
+        if "{msg}" in data:
+            params["msg"]=msg
+        return data.format(**params)
+    def parse(self,smsg:str):
+        if self.mod_type=="notifier":
+            self.api=self.handle_string(data=self.api,msg=smsg)
+            for key in self.params.keys():
+                self.params[key]=self.handle_string(data=self.params[key],msg=smsg)
+            for key in self.json_.keys():
+                self.json_[key]=self.handle_string(data=self.json_[key],msg=smsg)
 class SQLException(Exception):
+    def __init__(self,*args):
+        super().__init__(*args)
+class ModuleLoadError(Exception):
     def __init__(self,*args):
         super().__init__(*args)
 class EnhancedLabel(QLabel):
@@ -188,6 +238,24 @@ class TestProcessor():
         else:
             self.logger.error("非法的比赛类型")
             raise ValueError("非法的比赛类型")
+        self.modules=list()
+        for root,dirs,files in os.walk("modules"):
+            self.logger.debug("全部文件：%s" %files)
+            for file in files:
+                if file.endswith(".json")==True:
+                        with open(os.path.join(root,file),mode="r",encoding="utf-8") as mod_reader:
+                            self.logger.debug("正在读取文件 %s" %file)
+                            try:
+                                module=ProcessorModule(data=json.loads(mod_reader.read()))
+                            except ModuleLoadError:
+                                self.logger.debug("文件 %s 无法当作模块加载" %file) 
+                            else:
+                                self.logger.debug("正在将文件 %s 当作模块加载" %file)
+                                self.modules.append(module)
+                else:
+                    self.logger.debug("文件未以.json结尾，不被认为是模块")
+            break
+        self.logger.debug("已加载的模块列表：%s" %self.modules)
         self.client="5f582dd3683c2e0ae3aaacee"
         self.login()
         params={"t":str(int(time.time())),"id":self.activity_id}
@@ -454,6 +522,20 @@ class TestProcessor():
             with open(file="config.json",mode="w",encoding="utf-8") as writer:
                 writer.write(json.dumps(conf,sort_keys=True,indent=4,ensure_ascii=False))
             self.logger.debug("已更新Token数据供下次使用")
+        smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
+        for mod in self.modules:
+            self.logger.debug("模块数据：%s" %mod.data)
+            if mod.enabled==True:
+                self.logger.debug("模块 %s 处于启用状态" %mod.name)
+                if mod.mod_type=="notifier":
+                    self.logger.debug("已加载通知服务模块：%s" %mod.name)
+                    mod.parse(smsg=smsg)
+                    self.logger.debug("服务器回复：%s" %self.session.request(method=mod.method,url=mod.api,params=mod.params,json=mod.json_).json())
+                    self.logger.info("已发送远程通知。")
+                else:
+                    self.logger.error("模块 %s 属于不支持的模块类型" %mod.name)
+            else:
+                self.logger.debug("模块 %s 已禁用" %mod.name)
     @retry(wait=wait_fixed(2)+wait_random(0,3),retry=retry_if_exception_type(requests.exceptions.ConnectionError),stop=stop_after_attempt(5),reraise=True)
     def process(self,mode_id:str,sleep:bool=True):
         headers={"Referer":"https://%s.univs.cn/client/exam/%s/1/1/%s" %(self.prefix,self.activity_id,mode_id),}
@@ -486,10 +568,10 @@ class TestProcessor():
             verify_pos=self.normal_choice_pos(lst=question_ids)
         for question_id in question_ids:
             if sleep==True:
-                time.sleep(random.uniform(0.1,1.5))
+                time.sleep(random.uniform(self.conf["advanced"]["sleep_on"]["min"],self.conf["advanced"]["sleep_on"]["max"]))
                 # 随机休眠一段时间尝试规避速度过快导致的服务器警告
             else:
-                time.sleep(random.uniform(0.1,0.5))
+                time.sleep(random.uniform(self.conf["advanced"]["sleep_off"]["min"],self.conf["advanced"]["sleep_off"]["max"]))
                 # 还是有几率在对决模式中出现答题过快的问题，因此加入一个更短时间的睡眠取得稳定性和获胜率的平衡
             i=question_ids.index(question_id)
             num=num+1
@@ -968,7 +1050,7 @@ class SettingWindow(QDialog):
                             times=int(j.text())
                         data={"title":group.title(),"enabled":enabled,"times":times}
                     settings[group.objectName()]=data
-        settings.update({"font_prop":self.conf["font_prop"]})
+        settings.update({"font_prop":self.conf["font_prop"],"advanced":self.conf["advanced"]})
         self.logger.debug("设置数据：%s" %settings)
         with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
             conf_writer.write(json.dumps(settings,ensure_ascii=False,sort_keys=True,indent=4))
@@ -977,7 +1059,7 @@ class SettingWindow(QDialog):
         x=0
         y=0
         for key in conf.keys():
-            if type(conf[key])==bool or type(conf[key])==str or key=="auth" or type(conf[key])==int:
+            if type(conf[key])==bool or type(conf[key])==str or key=="auth" or type(conf[key])==int or key=="advanced":
                 continue
             conf_title=conf[key]["title"]
             conf_enabled=conf[key]["enabled"]
@@ -1162,6 +1244,16 @@ class UI(QMainWindow):
             "show_user_info":True,
             "font_prop":"SimSun",
             "randomrize":True,
+            "advanced":{
+                "sleep_off":{
+                    "min":0.1,
+                    "max":0.3
+                },
+                "sleep_on":{
+                    "min":0.1,
+                    "max":1.5
+                }
+            },
             "auth":{
                 "token":"",
                 "refresh_token":"",
@@ -1222,6 +1314,8 @@ class UI(QMainWindow):
         filehandler.setFormatter(formatter)
         self.logger.addHandler(self.handler)
         self.logger.addHandler(filehandler)
+        if os.path.exists("modules")==False:
+            os.mkdir("modules")
         self.resize(self.theme.size[0],self.theme.size[1])
         self.setWindowOpacity(self.theme.opacity)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
