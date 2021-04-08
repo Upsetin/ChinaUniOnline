@@ -89,20 +89,27 @@ class ProcessorModule():
         if self.conf!={}:
             for key in self.conf.keys():
                     if "{config}.%s" %key in data:
-                        data.replace("{config}.%s" %key,self.conf[key])
+                        data=data.replace("{config}.%s" %key,self.conf[key])
                         self.logger.debug("成功应用模块配置 %s=%s 到模块 %s" %(key,self.conf[key],self.name))
         else:
             self.logger.debug("模块 %s 不需要配置文件" %self.name)
+        self.logger.debug("格式化参数：%s" %params)
         return data.format(**params)
     def parse(self,smsg:str):
         if self.mod_type=="notifier":
+            self.token=self.handle_string(data=self.token,msg=smsg)
+            self.logger.debug("token=%s" %self.token)
             self.api=self.handle_string(data=self.api,msg=smsg)
+            self.logger.debug("api=%s" %self.api)
             for key in self.params.keys():
                 self.params[key]=self.handle_string(data=self.params[key],msg=smsg)
+            self.logger.debug("params=%s" %self.params)
             for key in self.json_.keys():
                 self.json_[key]=self.handle_string(data=self.json_[key],msg=smsg)
+            self.logger.debug("json_=%s" %self.json_)
             for key in self.data_.keys():
                 self.data_[key]=self.handle_string(data=self.data_[key],msg=smsg)
+            self.logger.debug("data_=%s" %self.data_)
     def exec(self,data):
         self.parse(smsg=data)
         if self.enabled==True:
@@ -291,7 +298,7 @@ class TestProcessor():
                 else:
                     self.logger.debug("文件未以.json结尾，不被认为是模块")
             break
-        self.logger.debug("已加载的模块列表：%s" %self.modules)
+        self.logger.debug("已加载的模块列表：%s" %[mod.name for mod in self.modules])
         self.client="5f582dd3683c2e0ae3aaacee"
         self.login()
         params={"t":str(int(time.time())),"id":self.activity_id}
