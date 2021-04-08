@@ -836,10 +836,12 @@ class TestProcessor():
             msg="(无)"
         self.logger.error("服务器返回信息：%s" %msg)
         return msg
-    def get_module_by_name(self,name:str):
+    def get_modules_by_name(self,name:str):
+        mods=list()
         for mod in self.modules:
             if mod.name==name:
-                return mod
+                mods.append(mod)
+        return mods
     def get_modules_by_type(self,type_:str):
         mods=list()
         for mod in self.modules:
