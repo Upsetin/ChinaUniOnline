@@ -90,9 +90,12 @@ class ProcessorModule():
                 self.data_[key]=self.handle_string(data=self.data_[key],msg=smsg)
     def exec(self,data):
         self.parse(smsg=data)
-        if self.mod_type=="notifier":
-            json_resp=requests.request(method=self.method,url=self.api,data=self.data_,params=self.params,json=self.json_).json()
-            self.logger.debug("服务器回复：%s" %json_resp)
+        if self.enabled==True:
+            if self.mod_type=="notifier":
+                json_resp=requests.request(method=self.method,url=self.api,data=self.data_,params=self.params,json=self.json_).json()
+                self.logger.debug("服务器回复：%s" %json_resp)
+        else:
+            self.logger.debug("模块已禁用")
 class SQLException(Exception):
     def __init__(self,*args):
         super().__init__(*args)
@@ -857,19 +860,32 @@ class TestProcessor():
         mods_id=list()
         mods_type=list()
         self.logger.debug("获得的参数：%s" %kwargs)
-        name=kwargs["name"] or ""
-        id_=kwargs["id_"] or ""
-        type_=kwargs["type_"] or ""
+        if "name" in kwargs.keys():
+            name=kwargs["name"]
+        else:
+            name=""
+        if "id_" in kwargs.keys():
+            id_=kwargs["id_"]
+        else:
+            id_=""
+        if "type_" in kwargs.keys():
+            type_=kwargs["type_"]
+        else:
+            type_=""
         for mod in self.modules:
             if name!="" and mod.name==name:
                 mods_name.append(mod)
             if id_!="" and mod.id_==id_:
                 mods_id.append(mod)
-            if type_!="" and mod.type_==type_:
+            if type_!="" and mod.mod_type==type_:
                 mods_type.append(mod)
-        for mods in [mods_name,mods_id,mods_type]:
-            if mods==[]:
-                mods=self.modules
+        if mods_name==[]:
+            mods_name=self.modules
+        if mods_id==[]:
+            mods_id=self.modules
+        if mods_type==[]:
+            mods_type=self.modules
+        self.logger.debug("选出的模块列表：mods_name=%s,mods_id=%s,mods_type=%s" %([mod_name.name for mod_name in mods_name],[mod_id.name for mod_id in mods_id],[mod_type.name for mod_type in mods_type]))
         return list(set(mods_name).intersection(mods_id,mods_type))
 
 class Work(QObject):
@@ -898,6 +914,7 @@ class Work(QObject):
         self.logger.debug("已提交终止信号")
         smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
         modules=self.processor.get_modules(type_="notifier")
+        self.logger.debug("获取模块：%s" %[mod.name for mod in modules])
         for mod in modules:
             mod.exec(smsg)
 class BootStrap(QObject):
