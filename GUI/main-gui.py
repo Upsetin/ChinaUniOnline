@@ -536,21 +536,6 @@ class TestProcessor():
             with open(file="config.json",mode="w",encoding="utf-8") as writer:
                 writer.write(json.dumps(conf,sort_keys=True,indent=4,ensure_ascii=False))
             self.logger.debug("已更新Token数据供下次使用")
-    def send_msg(self):
-        smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
-        modules=self.get_modules_by_type("notifier")
-        for mod in modules:
-            self.logger.debug("模块数据：%s" %mod.data)
-            if mod.enabled==True:
-                self.logger.debug("模块 %s 处于启用状态" %mod.name)
-                if mod.mod_type=="notifier":
-                    self.logger.debug("已加载通知服务模块：%s" %mod.name)
-                    mod.exec(data=smsg)
-                    self.logger.info("已发送远程通知。")
-                else:
-                    self.logger.error("模块 %s 属于不支持的模块类型" %mod.name)
-            else:
-                self.logger.debug("模块 %s 已禁用" %mod.name)
     @retry(wait=wait_fixed(2)+wait_random(0,3),retry=retry_if_exception_type(requests.exceptions.ConnectionError),stop=stop_after_attempt(5),reraise=True)
     def process(self,mode_id:str,sleep:bool=True):
         headers={"Referer":"https://%s.univs.cn/client/exam/%s/1/1/%s" %(self.prefix,self.activity_id,mode_id),}
@@ -885,7 +870,10 @@ class Work(QObject):
         self.processor.start(tray=self.tray,update_tray=self.update_tray)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
-        self.processor.send_msg()
+        smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
+        modules=self.processor.get_modules_by_type("notifier")
+        for mod in modules:
+            mod.exec(smsg)
 class BootStrap(QObject):
     close_dock_signal=pyqtSignal()
     update_tray=pyqtSignal(str)
@@ -911,7 +899,10 @@ class BootStrap(QObject):
         self.processor.start(times=self.times,tray=self.tray,update_tray=self.update_tray,bootstrap=True)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
-        self.processor.send_msg()
+        smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
+        modules=self.processor.get_modules_by_type("notifier")
+        for mod in modules:
+            mod.exec(smsg)
 class SettingWindow(QDialog):
     def __init__(self,parent:QWidget,theme:dict):
         super().__init__()
