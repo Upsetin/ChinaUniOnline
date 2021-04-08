@@ -34,9 +34,9 @@ matplotuse("Agg")
 class ProcessorModule():
     def __init__(self,data:dict):
         super().__init__()
+        self.logger=logging.getLogger(__name__)
+        self.data=data
         try:
-            self.logger=logging.getLogger(__name__)
-            self.data=data
             self.name=self.data["name"]
             self.mod_type=self.data["type"]
             self.author=self.data["author"]
@@ -84,10 +84,18 @@ class ProcessorModule():
                 self.json_[key]=self.handle_string(data=self.json_[key],msg=smsg)
             for key in self.data_.keys():
                 self.data_[key]=self.handle_string(data=self.data_[key],msg=smsg)
+    def exec(self,data):
+        self.parse(smsg=data)
+        if self.mod_type=="notifier":
+            json_resp=requests.request(method=self.method,url=self.api,data=self.data_,params=self.params,json=self.json_).json()
+            self.logger.debug("服务器回复：%s" %json_resp)
 class SQLException(Exception):
     def __init__(self,*args):
         super().__init__(*args)
 class ModuleLoadError(Exception):
+    def __init__(self,*args):
+        super().__init__(*args)
+class ModuleSecureWarning(Warning):
     def __init__(self,*args):
         super().__init__(*args)
 class EnhancedLabel(QLabel):
@@ -536,9 +544,7 @@ class TestProcessor():
                 self.logger.debug("模块 %s 处于启用状态" %mod.name)
                 if mod.mod_type=="notifier":
                     self.logger.debug("已加载通知服务模块：%s" %mod.name)
-                    mod.parse(smsg=smsg)
-                    json_resp=self.session.request(method=mod.method,url=mod.api,params=mod.params,json=mod.json_,data=mod.data_).json()
-                    self.logger.debug("服务器回复：%s" %json_resp)
+                    mod.exec(data=smsg)
                     self.logger.info("已发送远程通知。")
                 else:
                     self.logger.error("模块 %s 属于不支持的模块类型" %mod.name)
