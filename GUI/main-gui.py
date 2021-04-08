@@ -71,6 +71,14 @@ class ProcessorModule():
             self.logger.debug("模块 %s 加载过程中出现错误：%s" %(self.name,e))
             raise ModuleLoadError("模块加载出错")
         else:
+            if os.path.exists("modules/configs")==False:
+                os.mkdir("modules/configs")
+            if os.path.exists("modules/configs/%s.json" %self.id_)==True:
+                self.logger.debug("已加载模块配置文件")
+                with open(file="modules/configs/%s.json" %self.id_,mode="r",encoding="utf-8") as reader:
+                    self.conf=json.loads(reader.read())
+            else:
+                self.conf={}
             self.logger.debug("模块 %s 加载成功" %self.name)
     def handle_string(self,data:str,msg:str):
         params=dict()
@@ -78,6 +86,13 @@ class ProcessorModule():
             params["token"]=self.token
         if "{msg}" in data:
             params["msg"]=msg
+        if self.conf!={}:
+            for key in self.conf.keys():
+                    if "{config}.%s" %key in data:
+                        data.replace("{config}.%s" %key,self.conf[key])
+                        self.logger.debug("成功应用模块配置 %s=%s 到模块 %s" %(key,self.conf[key],self.name))
+        else:
+            self.logger.debug("模块 %s 不需要配置文件" %self.name)
         return data.format(**params)
     def parse(self,smsg:str):
         if self.mod_type=="notifier":

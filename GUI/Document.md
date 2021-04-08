@@ -62,25 +62,36 @@
 11. `{token}` 指代token
 12. `api` 请求的api地址
 13. `id` 模块的ID，要求不能重复，可选，不填写会以文件名为ID
+14. `{config}` 指代配置信息，使用`{config}.键名`指代对应的键值，比如`{config}.token`指代配置文件中的token的值，若键名不存在的话将不作解析
 
 ### 模块示例
 
 ```json
 {
     "enabled": true,
-    "token": "",
+    "token": "{config}.token",
     "method": "POST",
     "api": "https://qmsg.zendee.cn/send/{token}",
     "name": "Qmsg酱通知模块",
     "params": {
-        "qq": "",
+        "qq": "{config}.qq",
         "msg": "{msg}"
     },
     "type": "notifier",
-    "author": "ChinaUniOnlineGUI"
+    "author": "ChinaUniOnlineGUI",
+    "id":"QmsgNotifier"
 }
 ```
 
-将正确的Token和QQ信息填入后保存为json文件即可实现完成后通过Qmsg酱发送完成通知到设置的QQ号
+通过在modules文件夹的configs文件夹下新建`QmsgNotifier.json`并写入以下内容：
+
+```json
+{
+    "token":"",
+    "qq":""
+}
+```
+
+将正确的Token和QQ信息填入配置后保存为json文件即可实现完成后通过Qmsg酱发送完成通知到设置的QQ号
 
 **警告**：使用第三方内容可能存在难以预知的安全或者稳定性方面的问题，如果在使用过程中碰到问题，请向内容作者反馈。我们只能保证这个文档提到的示例模块是可以正常使用的。
