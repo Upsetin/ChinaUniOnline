@@ -32,11 +32,15 @@ if platform.system()=="Windows":
 matplotuse("Agg")
 # 让matplotlib使用Agg后端避免Tkinter在非主线程运行的问题
 class ProcessorModule():
-    def __init__(self,data:dict):
+    def __init__(self,data:dict,id_:str):
         super().__init__()
         self.logger=logging.getLogger(__name__)
         self.data=data
         try:
+            if "id" in self.data.keys():
+                self.id_=self.data["id"]
+            else:
+                self.id_=id_.replace(".json","")
             self.name=self.data["name"]
             self.mod_type=self.data["type"]
             self.author=self.data["author"]
@@ -260,7 +264,7 @@ class TestProcessor():
                         with open(os.path.join(root,file),mode="r",encoding="utf-8") as mod_reader:
                             self.logger.debug("正在读取文件 %s" %file)
                             try:
-                                module=ProcessorModule(data=json.loads(mod_reader.read()))
+                                module=ProcessorModule(data=json.loads(mod_reader.read()),id_=file)
                             except ModuleLoadError:
                                 self.logger.debug("文件 %s 无法当作模块加载" %file) 
                             else:
@@ -419,6 +423,10 @@ class TestProcessor():
         if json_response["code"]==1002:
             self.logger.error("Token已过期")
             raise RuntimeError(self.error_handler(json_response=json_response))
+        elif json_response["code"]!=0:
+            msg=self.error_handler(json_response=json_response)
+            self.logger.error("获取用户信息出现问题：%s" %msg)
+            raise RuntimeError("获取用户信息出现问题")
         self.logger.debug("获取用户信息：%s" %json_response)
         name=json_response["data"]["name"]
         university_name=json_response["data"]["university_name"]
@@ -836,18 +844,34 @@ class TestProcessor():
             msg="(无)"
         self.logger.error("服务器返回信息：%s" %msg)
         return msg
-    def get_modules_by_name(self,name:str):
-        mods=list()
+    def get_modules(self,**kwargs):
+        '''通过信息寻找模块
+        参数：
+            name:str 模块名称
+            type_:str 模块类型
+            id_:str 模块id
+        返回：
+            同时满足上述三个要求的模块列表
+        '''
+        mods_name=list()
+        mods_id=list()
+        mods_type=list()
+        self.logger.debug("获得的参数：%s" %kwargs)
+        name=kwargs["name"] or ""
+        id_=kwargs["id_"] or ""
+        type_=kwargs["type_"] or ""
         for mod in self.modules:
-            if mod.name==name:
-                mods.append(mod)
-        return mods
-    def get_modules_by_type(self,type_:str):
-        mods=list()
-        for mod in self.modules:
-            if mod.mod_type==type_:
-                mods.append(mod)
-        return mods
+            if name!="" and mod.name==name:
+                mods_name.append(mod)
+            if id_!="" and mod.id_==id_:
+                mods_id.append(mod)
+            if type_!="" and mod.type_==type_:
+                mods_type.append(mod)
+        for mods in [mods_name,mods_id,mods_type]:
+            if mods==[]:
+                mods=self.modules
+        return list(set(mods_name).intersection(mods_id,mods_type))
+
 class Work(QObject):
     close_dock_signal=pyqtSignal()
     update_tray=pyqtSignal(str)
@@ -873,7 +897,7 @@ class Work(QObject):
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
         smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
-        modules=self.processor.get_modules_by_type("notifier")
+        modules=self.processor.get_modules(type_="notifier")
         for mod in modules:
             mod.exec(smsg)
 class BootStrap(QObject):
@@ -902,7 +926,7 @@ class BootStrap(QObject):
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
         smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
-        modules=self.processor.get_modules_by_type("notifier")
+        modules=self.processor.get_modules(type_="notifier")
         for mod in modules:
             mod.exec(smsg)
 class SettingWindow(QDialog):
