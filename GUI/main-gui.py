@@ -538,7 +538,8 @@ class TestProcessor():
             self.logger.debug("已更新Token数据供下次使用")
     def send_msg(self):
         smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
-        for mod in self.modules:
+        modules=self.get_modules_by_type("notifier")
+        for mod in modules:
             self.logger.debug("模块数据：%s" %mod.data)
             if mod.enabled==True:
                 self.logger.debug("模块 %s 处于启用状态" %mod.name)
@@ -850,6 +851,16 @@ class TestProcessor():
             msg="(无)"
         self.logger.error("服务器返回信息：%s" %msg)
         return msg
+    def get_module_by_name(self,name:str):
+        for mod in self.modules:
+            if mod.name==name:
+                return mod
+    def get_modules_by_type(self,type_:str):
+        mods=list()
+        for mod in self.modules:
+            if mod.mod_type==type_:
+                mods.append(mod)
+        return mods
 class Work(QObject):
     close_dock_signal=pyqtSignal()
     update_tray=pyqtSignal(str)
