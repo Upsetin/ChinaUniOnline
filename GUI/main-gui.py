@@ -94,6 +94,8 @@ class ProcessorModule():
         else:
             self.logger.debug("模块 %s 不需要配置文件" %self.name)
         self.logger.debug("格式化参数：%s" %params)
+        if "{config}" in data:
+            self.logger.warning("模块 %s 存在未解析的关键字，可能会影响执行" %self.name)
         return data.format(**params)
     def parse(self,smsg:str):
         if self.mod_type=="notifier":
@@ -113,6 +115,7 @@ class ProcessorModule():
     def exec(self,data):
         self.parse(smsg=data)
         if self.enabled==True:
+            self.logger.info("模块 %s 正在执行" %self.name)
             if self.mod_type=="notifier":
                 json_resp=requests.request(method=self.method,url=self.api,data=self.data_,params=self.params,json=self.json_).json()
                 self.logger.debug("服务器回复：%s" %json_resp)
