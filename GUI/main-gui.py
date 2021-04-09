@@ -883,6 +883,9 @@ class TestProcessor():
         返回：
             同时满足上述三个要求的模块列表
         '''
+        if kwargs=={}:
+            self.logger.debug("方法调用参数有误，需要至少1个筛选器")
+            return []
         mods_name=list()
         mods_id=list()
         mods_type=list()
