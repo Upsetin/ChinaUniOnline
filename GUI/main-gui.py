@@ -96,8 +96,8 @@ class ProcessorModule():
         self.logger.debug("格式化参数：%s" %params)
         if "{config}" in data:
             self.logger.warning("模块 %s 存在未解析的关键字，可能会影响执行" %self.name)
-            data=data.replace("{config}",r"{config}")
-        return data.format(**params)
+            data=data.replace("{config}","#config#")
+        return data.format(**params).replace("#config#","{config}")
     def parse(self,smsg:str):
         if self.mod_type=="notifier":
             self.token=self.handle_string(data=self.token,msg=smsg)
