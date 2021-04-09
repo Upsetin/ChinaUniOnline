@@ -14,8 +14,7 @@ import numpy
 from matplotlib import pyplot as plt 
 from matplotlib import use as matplotuse
 from urllib import parse
-from PyQt6 import QtGui
-from PyQt6.QtGui import QAction, QIcon, QMouseEvent, QPixmap, QRegularExpressionValidator
+from PyQt6.QtGui import QAction, QIcon, QMouseEvent, QPixmap, QRegularExpressionValidator, QCursor, QFocusEvent
 from PyQt6.QtCore import QObject, QRegularExpression, QThread, Qt, pyqtBoundSignal, pyqtSignal
 from PyQt6.QtSql import QSqlDatabase, QSqlQuery
 from Crypto.PublicKey import RSA
@@ -31,7 +30,104 @@ if platform.system()=="Windows":
     # 让Windows的任务栏图标可以正常显示
 matplotuse("Agg")
 # 让matplotlib使用Agg后端避免Tkinter在非主线程运行的问题
+class ProcessorModule():
+    def __init__(self,data:dict,id_:str):
+        super().__init__()
+        self.logger=logging.getLogger(__name__)
+        self.data=data
+        try:
+            if "id" in self.data.keys():
+                self.id_=self.data["id"]
+            else:
+                self.id_=id_.replace(".json","")
+            self.name=self.data["name"]
+            self.mod_type=self.data["type"]
+            self.author=self.data["author"]
+            self.enabled=self.data["enabled"]
+            if self.mod_type=="notifier":
+                self.api=self.data["api"]
+                self.token=self.data["token"]
+                self.method=self.data["method"]
+                if "params" in self.data.keys():
+                    self.params=self.data["params"]
+                else:
+                    self.params={}
+                if "json" in self.data.keys():
+                    self.json_=self.data["json"]
+                else:
+                    self.json_={}
+                if "data" in self.data.keys():
+                    self.data_=self.data["data"]
+                else:
+                    self.data_={}
+            else:
+                self.logger.debug("不支持的模块类型")
+                raise ModuleLoadError("不支持的模块类型")
+        except KeyError:
+            self.logger.debug("模块 %s 格式有误" %self.name)
+            raise ModuleLoadError("模块格式有误")
+        except Exception as e:
+            self.logger.debug("模块 %s 加载过程中出现错误：%s" %(self.name,e))
+            raise ModuleLoadError("模块加载出错")
+        else:
+            if os.path.exists("modules/configs")==False:
+                os.mkdir("modules/configs")
+            if os.path.exists("modules/configs/%s.json" %self.id_)==True:
+                self.logger.debug("已加载模块配置文件")
+                with open(file="modules/configs/%s.json" %self.id_,mode="r",encoding="utf-8") as reader:
+                    self.conf=json.loads(reader.read())
+            else:
+                self.conf={}
+            self.logger.debug("模块 %s 加载成功" %self.name)
+    def handle_string(self,data:str,msg:str):
+        params=dict()
+        if "{token}" in data:
+            params["token"]=self.token
+        if "{msg}" in data:
+            params["msg"]=msg
+        if self.conf!={}:
+            for key in self.conf.keys():
+                    if "{config}.%s" %key in data:
+                        data=data.replace("{config}.%s" %key,self.conf[key])
+                        self.logger.debug("成功应用模块配置 %s=%s 到模块 %s" %(key,self.conf[key],self.name))
+        else:
+            self.logger.debug("模块 %s 不需要配置文件" %self.name)
+        self.logger.debug("格式化参数：%s" %params)
+        if "{config}" in data:
+            self.logger.warning("模块 %s 存在未解析的关键字，可能会影响执行" %self.name)
+            data=data.replace("{config}","#config#")
+        return data.format(**params).replace("#config#","{config}")
+    def parse(self,smsg:str):
+        if self.mod_type=="notifier":
+            self.token=self.handle_string(data=self.token,msg=smsg)
+            self.logger.debug("token=%s" %self.token)
+            self.api=self.handle_string(data=self.api,msg=smsg)
+            self.logger.debug("api=%s" %self.api)
+            for key in self.params.keys():
+                self.params[key]=self.handle_string(data=self.params[key],msg=smsg)
+            self.logger.debug("params=%s" %self.params)
+            for key in self.json_.keys():
+                self.json_[key]=self.handle_string(data=self.json_[key],msg=smsg)
+            self.logger.debug("json_=%s" %self.json_)
+            for key in self.data_.keys():
+                self.data_[key]=self.handle_string(data=self.data_[key],msg=smsg)
+            self.logger.debug("data_=%s" %self.data_)
+    def exec(self,data):
+        self.parse(smsg=data)
+        if self.enabled==True:
+            self.logger.info("模块 %s 正在执行" %self.name)
+            if self.mod_type=="notifier":
+                json_resp=requests.request(method=self.method,url=self.api,data=self.data_,params=self.params,json=self.json_).json()
+                self.logger.debug("服务器回复：%s" %json_resp)
+        else:
+            self.logger.debug("模块 %s 已禁用" %self.name)
 class SQLException(Exception):
+    def __init__(self,*args):
+        super().__init__(*args)
+class ModuleLoadError(Exception):
+    def __init__(self,*args):
+        super().__init__(*args)
+class ModuleSecureWarning(Warning):
     def __init__(self,*args):
         super().__init__(*args)
 class EnhancedLabel(QLabel):
@@ -47,7 +143,7 @@ class EnhancedLabel(QLabel):
         self.clicked.emit()
     def mouseReleaseEvent(self,event:QMouseEvent):
         super().mouseReleaseEvent(event)
-        self.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
+        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
     def mouseMoveEvent(self,event:QMouseEvent):
         super().mouseMoveEvent(event)
 
@@ -79,7 +175,7 @@ class UserAvatar(QWidget):
         self.score_label.setAlignment(Qt.Alignment.AlignCenter)
         self.school_label=QLabel("学校：%s" %school)
         self.school_label.setAlignment(Qt.Alignment.AlignCenter)
-        self.times_label=QLabel("答题次数:%d\n团队答题次数：%d" %(times,t_times))
+        self.times_label=QLabel("答题次数：%d\n团队答题次数：%d" %(times,t_times))
         self.times_label.setAlignment(Qt.Alignment.AlignCenter)
         info.addWidget(self.name_label)
         info.addWidget(self.province_label)
@@ -118,13 +214,13 @@ class EnhancedEdit(QLineEdit):
         if self.long==True:
             self.getFocus.connect(self.show_clear_button)
             self.lostFocus.connect(self.disable_clear_button)
-    def focusOutEvent(self, a0: QtGui.QFocusEvent) -> None:
+    def focusOutEvent(self, a0: QFocusEvent) -> None:
         self.lostFocus.emit()
         return super().focusOutEvent(a0)
-    def focusInEvent(self, a0: QtGui.QFocusEvent) -> None:
+    def focusInEvent(self, a0: QFocusEvent) -> None:
         self.getFocus.emit()
         return super().focusInEvent(a0)
-    def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
+    def mousePressEvent(self, a0: QMouseEvent) -> None:
         super().mousePressEvent(a0)
         if self.long==True and a0.button()==Qt.MouseButtons.LeftButton:
             self.selectAll()
@@ -188,6 +284,24 @@ class TestProcessor():
         else:
             self.logger.error("非法的比赛类型")
             raise ValueError("非法的比赛类型")
+        self.modules=list()
+        for root,dirs,files in os.walk("modules"):
+            self.logger.debug("全部文件：%s" %files)
+            for file in files:
+                if file.endswith(".json")==True:
+                        with open(os.path.join(root,file),mode="r",encoding="utf-8") as mod_reader:
+                            self.logger.debug("正在读取文件 %s" %file)
+                            try:
+                                module=ProcessorModule(data=json.loads(mod_reader.read()),id_=file)
+                            except ModuleLoadError:
+                                self.logger.debug("文件 %s 无法当作模块加载" %file) 
+                            else:
+                                self.logger.debug("正在将文件 %s 当作模块加载" %file)
+                                self.modules.append(module)
+                else:
+                    self.logger.debug("文件未以.json结尾，不被认为是模块")
+            break
+        self.logger.debug("已加载的模块列表：%s" %[mod.name for mod in self.modules])
         self.client="5f582dd3683c2e0ae3aaacee"
         self.login()
         params={"t":str(int(time.time())),"id":self.activity_id}
@@ -337,6 +451,10 @@ class TestProcessor():
         if json_response["code"]==1002:
             self.logger.error("Token已过期")
             raise RuntimeError(self.error_handler(json_response=json_response))
+        elif json_response["code"]!=0:
+            msg=self.error_handler(json_response=json_response)
+            self.logger.error("获取用户信息出现问题：%s" %msg)
+            raise RuntimeError("获取用户信息出现问题")
         self.logger.debug("获取用户信息：%s" %json_response)
         name=json_response["data"]["name"]
         university_name=json_response["data"]["university_name"]
@@ -486,10 +604,10 @@ class TestProcessor():
             verify_pos=self.normal_choice_pos(lst=question_ids)
         for question_id in question_ids:
             if sleep==True:
-                time.sleep(random.uniform(0.1,3.0))
+                time.sleep(random.uniform(self.conf["advanced"]["sleep_on"]["min"],self.conf["advanced"]["sleep_on"]["max"]))
                 # 随机休眠一段时间尝试规避速度过快导致的服务器警告
             else:
-                time.sleep(random.uniform(0.1,0.5))
+                time.sleep(random.uniform(self.conf["advanced"]["sleep_off"]["min"],self.conf["advanced"]["sleep_off"]["max"]))
                 # 还是有几率在对决模式中出现答题过快的问题，因此加入一个更短时间的睡眠取得稳定性和获胜率的平衡
             i=question_ids.index(question_id)
             num=num+1
@@ -510,10 +628,10 @@ class TestProcessor():
         race_code=json_response["race_code"]
         self.finish(race_code=race_code,activity_id=self.activity_id,mode_id=mode_id)
         self.logger.info("此次成功查询 %d 个题，收录 %d 个题" %(SuccessNum,FailNum))
-    def normal_choice_pos(self,lst:list,max_:int=None):
+    def normal_choice_pos(self,lst:list,max_:int=-1):
         mu=(len(lst)-1)/2
         sigma=len(lst)/6
-        if max_==None:
+        if max_==-1:
             max_=len(lst)-1
         while True:
             index=int(random.normalvariate(mu=mu,sigma=sigma))
@@ -587,7 +705,7 @@ class TestProcessor():
             answer_ids=list()
             for answer_title in answer:
                 for answer_id in answers:
-                    if answer_title in op_result[answer_id]:
+                    if answer_title in op_result[answer_id].strip():
                         answer_ids.append(answer_id)
             self.logger.debug("正确答案的ID列表：%s" %answer_ids)
             return self.process_ans(question_id=question_id,answer_ids=answer_ids,mode_id=mode_id,activity_id=self.activity_id,catch=False)
@@ -632,10 +750,11 @@ class TestProcessor():
         self.logger.debug("data=%s" %data)
         json_response=self.session.post("https://%s.univs.cn/cgi-bin/race/answer/" %self.prefix,json=data).json()
         self.logger.debug("%s_response=%s" %(prefix,json_response))
-        if json_response["code"]==0 and catch==True:
-            return json_response["data"]["correct_ids"]
-        elif json_response["code"]==0 and catch==False:
-            return json_response["data"]["correct"]
+        if json_response["code"]==0:
+            if catch==True:
+                return json_response["data"]["correct_ids"]
+            else:
+                return json_response["data"]["correct"]   
         elif json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
             raise RuntimeError("检测到此账号在其他客户端登陆")
@@ -754,6 +873,50 @@ class TestProcessor():
             msg="(无)"
         self.logger.error("服务器返回信息：%s" %msg)
         return msg
+    def get_modules(self,**kwargs):
+        '''通过信息寻找模块
+        参数：
+            name:str 模块名称
+            type_:str 模块类型
+            id_:str 模块id
+        返回：
+            同时满足上述三个要求的模块列表
+        '''
+        if kwargs=={}:
+            self.logger.debug("方法调用参数有误，需要至少1个筛选器")
+            return []
+        mods_name=list()
+        mods_id=list()
+        mods_type=list()
+        self.logger.debug("获得的参数：%s" %kwargs)
+        if "name" in kwargs.keys():
+            name=kwargs["name"]
+        else:
+            name=""
+        if "id_" in kwargs.keys():
+            id_=kwargs["id_"]
+        else:
+            id_=""
+        if "type_" in kwargs.keys():
+            type_=kwargs["type_"]
+        else:
+            type_=""
+        for mod in self.modules:
+            if name!="" and mod.name==name:
+                mods_name.append(mod)
+            if id_!="" and mod.id_==id_:
+                mods_id.append(mod)
+            if type_!="" and mod.mod_type==type_:
+                mods_type.append(mod)
+        if mods_name==[]:
+            mods_name=self.modules
+        if mods_id==[]:
+            mods_id=self.modules
+        if mods_type==[]:
+            mods_type=self.modules
+        self.logger.debug("选出的模块列表：mods_name=%s,mods_id=%s,mods_type=%s" %([mod_name.name for mod_name in mods_name],[mod_id.name for mod_id in mods_id],[mod_type.name for mod_type in mods_type]))
+        return list(set(mods_name).intersection(mods_id,mods_type))
+
 class Work(QObject):
     close_dock_signal=pyqtSignal()
     update_tray=pyqtSignal(str)
@@ -773,11 +936,16 @@ class Work(QObject):
         self.logger.debug("已实例化四史处理类")
         self.processor.start(tray=self.tray,update_tray=self.update_tray)
         self.close_dock_signal.emit()
-        self.processor_new=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
+        self.processor=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
         self.logger.debug("已实例化党史处理类")
-        self.processor_new.start(tray=self.tray,update_tray=self.update_tray)
+        self.processor.start(tray=self.tray,update_tray=self.update_tray)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
+        smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
+        modules=self.processor.get_modules(type_="notifier")
+        self.logger.debug("获取模块：%s" %[mod.name for mod in modules])
+        for mod in modules:
+            mod.exec(smsg)
 class BootStrap(QObject):
     close_dock_signal=pyqtSignal()
     update_tray=pyqtSignal(str)
@@ -798,11 +966,15 @@ class BootStrap(QObject):
         self.logger.debug("已实例化四史处理类")
         self.processor.start(times=self.times,tray=self.tray,update_tray=self.update_tray,bootstrap=True)
         self.close_dock_signal.emit()
-        self.processor_new=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
+        self.processor=TestProcessor(query=self.query,show_qr_signal=self.show_qr_signal,close_qr_signal=self.close_qr_signal,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,prefix="dsjd")
         self.logger.debug("已实例化党史处理类")
-        self.processor_new.start(times=self.times,tray=self.tray,update_tray=self.update_tray,bootstrap=True)
+        self.processor.start(times=self.times,tray=self.tray,update_tray=self.update_tray,bootstrap=True)
         self.finish_signal.emit()
         self.logger.debug("已提交终止信号")
+        smsg="%s ChinaUniOnlineGUI：\n程序执行完成，具体执行结果请查看程序记录" %time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
+        modules=self.processor.get_modules(type_="notifier")
+        for mod in modules:
+            mod.exec(smsg)
 class SettingWindow(QDialog):
     def __init__(self,parent:QWidget,theme:dict):
         super().__init__()
@@ -816,6 +988,7 @@ class SettingWindow(QDialog):
         self.setModal(True)
         self.setParent(parent)
         self.resize(int(parent.size().width()*(600/1024)),int(parent.size().height()*(600/1024)))
+        self.move(int(0.5*(parent.width()-self.width())),int(0.5*(parent.height()-self.height())))
         title=QLabel("设置")
         title.setStyleSheet(theme["title"])
         title.setAlignment(Qt.Alignment.AlignCenter)
@@ -968,7 +1141,7 @@ class SettingWindow(QDialog):
                             times=int(j.text())
                         data={"title":group.title(),"enabled":enabled,"times":times}
                     settings[group.objectName()]=data
-        settings.update({"font_prop":self.conf["font_prop"]})
+        settings.update({"font_prop":self.conf["font_prop"],"advanced":self.conf["advanced"],"pos":self.conf["pos"]})
         self.logger.debug("设置数据：%s" %settings)
         with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
             conf_writer.write(json.dumps(settings,ensure_ascii=False,sort_keys=True,indent=4))
@@ -977,7 +1150,7 @@ class SettingWindow(QDialog):
         x=0
         y=0
         for key in conf.keys():
-            if type(conf[key])==bool or type(conf[key])==str or key=="auth" or type(conf[key])==int:
+            if type(conf[key])!=dict or key=="auth" or key=="advanced":
                 continue
             conf_title=conf[key]["title"]
             conf_enabled=conf[key]["enabled"]
@@ -1154,6 +1327,7 @@ class UI(QMainWindow):
         filehandler.setLevel(logging.INFO)
         self.logger.setLevel(logging.INFO)
         self.default_conf={
+            "pos":[0,0],
             "debug":False,
             "proxy":"",
             "theme":"default",
@@ -1162,6 +1336,16 @@ class UI(QMainWindow):
             "show_user_info":True,
             "font_prop":"SimSun",
             "randomrize":True,
+            "advanced":{
+                "sleep_off":{
+                    "min":0.1,
+                    "max":0.3
+                },
+                "sleep_on":{
+                    "min":0.1,
+                    "max":1.5
+                }
+            },
             "auth":{
                 "token":"",
                 "refresh_token":"",
@@ -1222,6 +1406,8 @@ class UI(QMainWindow):
         filehandler.setFormatter(formatter)
         self.logger.addHandler(self.handler)
         self.logger.addHandler(filehandler)
+        if os.path.exists("modules")==False:
+            os.mkdir("modules")
         self.resize(self.theme.size[0],self.theme.size[1])
         self.setWindowOpacity(self.theme.opacity)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -1231,7 +1417,6 @@ class UI(QMainWindow):
         self.setWindowTitle("ChinaUniOnlineGUI")
         self.tray=QSystemTrayIcon()
         self.tray.setIcon(QIcon(self.theme.tray))
-        self.tray.setToolTip(self.windowTitle()+"\n当前状态：未开始")
         self.tray.activated.connect(self.tray_func)
         self.main_layout=QGridLayout()
         central_widget.setLayout(self.main_layout)
@@ -1310,6 +1495,11 @@ class UI(QMainWindow):
         tray_menu.addAction(action_exit)
         tray_menu.setStyleSheet(self.theme.tray_menu)
         self.tray.setContextMenu(tray_menu)
+        self.move(conf["pos"][0],conf["pos"][1])
+        self.update_status("未开始")
+    def update_status(self,s:str):
+        self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s)
+        self.handler.widget.setToolTip("当前状态："+s)
     def update_info_callback(self,info:dict):
         if self.show_user_info==True:
             self.avatar.update_score(score=info["integral"],t_score=info["t_integral"])
@@ -1391,7 +1581,7 @@ class UI(QMainWindow):
         bootstrap_thread=QThread()
         bootstrap=BootStrap(query=self.query,show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
         bootstrap.close_dock_signal.connect(self.close_dock)
-        bootstrap.update_tray.connect(lambda s: self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s))
+        bootstrap.update_tray.connect(self.update_status)
         bootstrap.moveToThread(bootstrap_thread)
         bootstrap_thread.started.connect(bootstrap.start)
         bootstrap_thread.finished.connect(self.finish_bootstrap)
@@ -1460,7 +1650,7 @@ class UI(QMainWindow):
         self.start_time=time.time()
         self.work=Work(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,query=self.query)
         self.work.close_dock_signal.connect(self.close_dock)
-        self.work.update_tray.connect(lambda s: self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s))
+        self.work.update_tray.connect(self.update_status)
         self.work_thread=QThread()
         self.work.moveToThread(self.work_thread)
         self.work_thread.started.connect(self.work.start)
@@ -1492,7 +1682,7 @@ class UI(QMainWindow):
         self.logger.info("执行完成，共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)))
         if self.isVisible()==False:
             self.tray.showMessage("ChinaUniOnline:任务执行完成","共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)),QSystemTrayIcon.MessageIcon.Information)
-        self.tray.setToolTip(self.windowTitle()+"\n当前状态：已完成")
+        self.update_status("已完成")
     def show_qr(self,qr:bytes):
         title_label=QLabel("请使用微信扫描小程序码完成登陆")
         title_label.setStyleSheet(self.theme.qr_title)
@@ -1562,6 +1752,11 @@ class UI(QMainWindow):
             self.logger.debug("已关闭未关闭的数据库连接")
         else:
             self.logger.debug("无未关闭的数据库连接")
+        with open(file="config.json",mode="r",encoding="utf-8") as reader:
+            conf=json.loads(reader.read())
+        conf["pos"]=[self.pos().x(),self.pos().y()]
+        with open(file="config.json",mode="w",encoding="utf-8") as writer:
+            writer.write(json.dumps(conf,ensure_ascii=False,indent=4,sort_keys=True))
         return super().close()
     def mousePressEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标按压事件")
@@ -1580,12 +1775,12 @@ class UI(QMainWindow):
             self.move(self.x()+delta_x,self.y()+delta_y)#更改窗口位置
             self.logger.debug("已更改窗口位置")
             self.old_pos=event.globalPosition()
-            self.setCursor(QtGui.QCursor(Qt.CursorShape.SizeAllCursor))  #更改鼠标图标
+            self.setCursor(QCursor(Qt.CursorShape.SizeAllCursor))  #更改鼠标图标
     def mouseReleaseEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标释放事件")
         super().mouseReleaseEvent(event)
         self.m_flag=False
-        self.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
+        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
 if __name__=="__main__":
     app=QApplication(sys.argv)
     ui=UI()
