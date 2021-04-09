@@ -14,8 +14,7 @@ import numpy
 from matplotlib import pyplot as plt 
 from matplotlib import use as matplotuse
 from urllib import parse
-from PyQt6 import QtGui
-from PyQt6.QtGui import QAction, QIcon, QMouseEvent, QPixmap, QRegularExpressionValidator
+from PyQt6.QtGui import QAction, QIcon, QMouseEvent, QPixmap, QRegularExpressionValidator, QCursor, QFocusEvent
 from PyQt6.QtCore import QObject, QRegularExpression, QThread, Qt, pyqtBoundSignal, pyqtSignal
 from PyQt6.QtSql import QSqlDatabase, QSqlQuery
 from Crypto.PublicKey import RSA
@@ -144,7 +143,7 @@ class EnhancedLabel(QLabel):
         self.clicked.emit()
     def mouseReleaseEvent(self,event:QMouseEvent):
         super().mouseReleaseEvent(event)
-        self.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
+        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
     def mouseMoveEvent(self,event:QMouseEvent):
         super().mouseMoveEvent(event)
 
@@ -215,13 +214,13 @@ class EnhancedEdit(QLineEdit):
         if self.long==True:
             self.getFocus.connect(self.show_clear_button)
             self.lostFocus.connect(self.disable_clear_button)
-    def focusOutEvent(self, a0: QtGui.QFocusEvent) -> None:
+    def focusOutEvent(self, a0: QFocusEvent) -> None:
         self.lostFocus.emit()
         return super().focusOutEvent(a0)
-    def focusInEvent(self, a0: QtGui.QFocusEvent) -> None:
+    def focusInEvent(self, a0: QFocusEvent) -> None:
         self.getFocus.emit()
         return super().focusInEvent(a0)
-    def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
+    def mousePressEvent(self, a0: QMouseEvent) -> None:
         super().mousePressEvent(a0)
         if self.long==True and a0.button()==Qt.MouseButtons.LeftButton:
             self.selectAll()
@@ -989,6 +988,7 @@ class SettingWindow(QDialog):
         self.setModal(True)
         self.setParent(parent)
         self.resize(int(parent.size().width()*(600/1024)),int(parent.size().height()*(600/1024)))
+        self.move(int(0.5*(parent.width()-self.width())),int(0.5*(parent.height()-self.height())))
         title=QLabel("设置")
         title.setStyleSheet(theme["title"])
         title.setAlignment(Qt.Alignment.AlignCenter)
@@ -1417,7 +1417,6 @@ class UI(QMainWindow):
         self.setWindowTitle("ChinaUniOnlineGUI")
         self.tray=QSystemTrayIcon()
         self.tray.setIcon(QIcon(self.theme.tray))
-        self.tray.setToolTip(self.windowTitle()+"\n当前状态：未开始")
         self.tray.activated.connect(self.tray_func)
         self.main_layout=QGridLayout()
         central_widget.setLayout(self.main_layout)
@@ -1497,6 +1496,10 @@ class UI(QMainWindow):
         tray_menu.setStyleSheet(self.theme.tray_menu)
         self.tray.setContextMenu(tray_menu)
         self.move(conf["pos"][0],conf["pos"][1])
+        self.update_status("未开始")
+    def update_status(self,s:str):
+        self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s)
+        self.handler.widget.setToolTip("当前状态："+s)
     def update_info_callback(self,info:dict):
         if self.show_user_info==True:
             self.avatar.update_score(score=info["integral"],t_score=info["t_integral"])
@@ -1578,7 +1581,7 @@ class UI(QMainWindow):
         bootstrap_thread=QThread()
         bootstrap=BootStrap(query=self.query,show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
         bootstrap.close_dock_signal.connect(self.close_dock)
-        bootstrap.update_tray.connect(lambda s: self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s))
+        bootstrap.update_tray.connect(self.update_status)
         bootstrap.moveToThread(bootstrap_thread)
         bootstrap_thread.started.connect(bootstrap.start)
         bootstrap_thread.finished.connect(self.finish_bootstrap)
@@ -1647,7 +1650,7 @@ class UI(QMainWindow):
         self.start_time=time.time()
         self.work=Work(show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal,query=self.query)
         self.work.close_dock_signal.connect(self.close_dock)
-        self.work.update_tray.connect(lambda s: self.tray.setToolTip(self.windowTitle()+"\n当前状态："+s))
+        self.work.update_tray.connect(self.update_status)
         self.work_thread=QThread()
         self.work.moveToThread(self.work_thread)
         self.work_thread.started.connect(self.work.start)
@@ -1679,7 +1682,7 @@ class UI(QMainWindow):
         self.logger.info("执行完成，共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)))
         if self.isVisible()==False:
             self.tray.showMessage("ChinaUniOnline:任务执行完成","共计用时 {:0>2d}:{:0>2d}:{:0>2d}".format(int(hours),int(mins),int(secs)),QSystemTrayIcon.MessageIcon.Information)
-        self.tray.setToolTip(self.windowTitle()+"\n当前状态：已完成")
+        self.update_status("已完成")
     def show_qr(self,qr:bytes):
         title_label=QLabel("请使用微信扫描小程序码完成登陆")
         title_label.setStyleSheet(self.theme.qr_title)
@@ -1772,12 +1775,12 @@ class UI(QMainWindow):
             self.move(self.x()+delta_x,self.y()+delta_y)#更改窗口位置
             self.logger.debug("已更改窗口位置")
             self.old_pos=event.globalPosition()
-            self.setCursor(QtGui.QCursor(Qt.CursorShape.SizeAllCursor))  #更改鼠标图标
+            self.setCursor(QCursor(Qt.CursorShape.SizeAllCursor))  #更改鼠标图标
     def mouseReleaseEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标释放事件")
         super().mouseReleaseEvent(event)
         self.m_flag=False
-        self.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
+        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
 if __name__=="__main__":
     app=QApplication(sys.argv)
     ui=UI()
