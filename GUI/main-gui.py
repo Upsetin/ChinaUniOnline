@@ -96,6 +96,7 @@ class ProcessorModule():
         self.logger.debug("格式化参数：%s" %params)
         if "{config}" in data:
             self.logger.warning("模块 %s 存在未解析的关键字，可能会影响执行" %self.name)
+            data=data.replace("{config}",r"{config}")
         return data.format(**params)
     def parse(self,smsg:str):
         if self.mod_type=="notifier":
@@ -120,7 +121,7 @@ class ProcessorModule():
                 json_resp=requests.request(method=self.method,url=self.api,data=self.data_,params=self.params,json=self.json_).json()
                 self.logger.debug("服务器回复：%s" %json_resp)
         else:
-            self.logger.debug("模块已禁用")
+            self.logger.debug("模块 %s 已禁用" %self.name)
 class SQLException(Exception):
     def __init__(self,*args):
         super().__init__(*args)
@@ -705,7 +706,7 @@ class TestProcessor():
             answer_ids=list()
             for answer_title in answer:
                 for answer_id in answers:
-                    if answer_title in op_result[answer_id]:
+                    if answer_title in op_result[answer_id].strip():
                         answer_ids.append(answer_id)
             self.logger.debug("正确答案的ID列表：%s" %answer_ids)
             return self.process_ans(question_id=question_id,answer_ids=answer_ids,mode_id=mode_id,activity_id=self.activity_id,catch=False)
@@ -750,10 +751,11 @@ class TestProcessor():
         self.logger.debug("data=%s" %data)
         json_response=self.session.post("https://%s.univs.cn/cgi-bin/race/answer/" %self.prefix,json=data).json()
         self.logger.debug("%s_response=%s" %(prefix,json_response))
-        if json_response["code"]==0 and catch==True:
-            return json_response["data"]["correct_ids"]
-        elif json_response["code"]==0 and catch==False:
-            return json_response["data"]["correct"]
+        if json_response["code"]==0:
+            if catch==True:
+                return json_response["data"]["correct_ids"]
+            else:
+                return json_response["data"]["correct"]   
         elif json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
             raise RuntimeError("检测到此账号在其他客户端登陆")
@@ -1136,7 +1138,7 @@ class SettingWindow(QDialog):
                             times=int(j.text())
                         data={"title":group.title(),"enabled":enabled,"times":times}
                     settings[group.objectName()]=data
-        settings.update({"font_prop":self.conf["font_prop"],"advanced":self.conf["advanced"]})
+        settings.update({"font_prop":self.conf["font_prop"],"advanced":self.conf["advanced"],"pos":self.conf["pos"]})
         self.logger.debug("设置数据：%s" %settings)
         with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
             conf_writer.write(json.dumps(settings,ensure_ascii=False,sort_keys=True,indent=4))
@@ -1145,7 +1147,7 @@ class SettingWindow(QDialog):
         x=0
         y=0
         for key in conf.keys():
-            if type(conf[key])==bool or type(conf[key])==str or key=="auth" or type(conf[key])==int or key=="advanced":
+            if type(conf[key])!=dict or key=="auth" or key=="advanced":
                 continue
             conf_title=conf[key]["title"]
             conf_enabled=conf[key]["enabled"]
@@ -1322,6 +1324,7 @@ class UI(QMainWindow):
         filehandler.setLevel(logging.INFO)
         self.logger.setLevel(logging.INFO)
         self.default_conf={
+            "pos":[0,0],
             "debug":False,
             "proxy":"",
             "theme":"default",
@@ -1490,6 +1493,7 @@ class UI(QMainWindow):
         tray_menu.addAction(action_exit)
         tray_menu.setStyleSheet(self.theme.tray_menu)
         self.tray.setContextMenu(tray_menu)
+        self.move(conf["pos"][0],conf["pos"][1])
     def update_info_callback(self,info:dict):
         if self.show_user_info==True:
             self.avatar.update_score(score=info["integral"],t_score=info["t_integral"])
@@ -1742,6 +1746,11 @@ class UI(QMainWindow):
             self.logger.debug("已关闭未关闭的数据库连接")
         else:
             self.logger.debug("无未关闭的数据库连接")
+        with open(file="config.json",mode="r",encoding="utf-8") as reader:
+            conf=json.loads(reader.read())
+        conf["pos"]=[self.pos().x(),self.pos().y()]
+        with open(file="config.json",mode="w",encoding="utf-8") as writer:
+            writer.write(json.dumps(conf,ensure_ascii=False,indent=4,sort_keys=True))
         return super().close()
     def mousePressEvent(self, event:QMouseEvent):
         self.logger.debug("触发鼠标按压事件")
