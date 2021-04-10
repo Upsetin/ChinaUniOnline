@@ -376,7 +376,7 @@ def Login():
 
 
 #获取token
-def GetToken(uid='6018e5d37fc77f3d90194078'):
+def GetToken(uid=''):
     url = 'https://ssxx.univs.cn/cgi-bin/authorize/token/?t=1612276118&uid=%s'%(uid)
     a = requests.get(url=url)
     global token
