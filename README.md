@@ -55,7 +55,7 @@
 https://ssxx.univs.cn/cgi-bin/authorize/token/?uid=xxxx&tdsourcetag=s_pctim_aiomsg    
 运行main.exe输入token即可开始刷题
 
-# 该项目蓝奏云下载地址( 3.18 已更新 ) [https://wws.lanzous.com/ikdLUn2m1gj](https://wws.lanzous.com/ikdLUn2m1gj) 密码:i0hq
+# 该项目网盘下载地址(4.10更新 ) [https://590m.com/f/31881576-489404500-d1abf5](https://590m.com/f/31881576-489404500-d1abf5  密码:1092
 ### 📧 联系邮箱
 #### xiaobaiyeaidaima@gmail.com
 ## 若对您有所帮助，记得点个Star🌟！！！  
