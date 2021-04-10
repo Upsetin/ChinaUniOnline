@@ -47,7 +47,7 @@
   
 ### 关于uid或token的获取
 #### 1. 在微信中访问链接 https://open.weixin.qq.com/connect/oauth2/authorize?appid=wxe12424c3b8aad5e6&redirect_uri=https://core.u.hep.com.cn/oauth/wechatmp/redirect&response_type=code&scope=snsapi_userinfo&state=5f582dd3683c2e0ae3aaacee-noguard-https://api.moeshin.com/univs_ssxx_uid/result.php/&connect_redirect=1#wechat_redirect
-#### 2.在微信中打开http://sishi.wwwtop.top/sishiGO（将链接发送给文件助手然后点击即可）链接获取token，在此感谢`i呀我去`公众号提供的uid获取方法，并且该公号也提供在线做题服务，更多服务请自行获取
+#### 2.在微信中打开 http://sishi.wwwtop.top/sishiGO （将链接发送给文件助手然后点击即可）链接获取token，在此感谢`i呀我去`公众号提供的uid获取方法，并且该公号也提供在线做题服务，更多服务请自行获取
 #### 3.可参考GUI文件内，[@zhanghua000](http:\/\/github.com\/zhanghua000)推荐的方法
 #### 2.也可在电脑登录最新版微信，将答题页面分享给文件助手，电脑打开该页面并登录，使用抓包软件获取请求header里的token
 #### 3. 
