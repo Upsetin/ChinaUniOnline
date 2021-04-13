@@ -434,8 +434,11 @@ class TestProcessor():
                 self.logger.info("使用存储的UID完成登陆")
                 params={"t":str(int(time.time())),"uid":self.uid}
                 json_response=self.session.get("https://%s.univs.cn/cgi-bin/authorize/token/" %self.prefix,params=params).json()
+                self.logger.debug("服务器回复：%s" %json_response)
                 self.token=json_response["token"]
+                self.logger.debug("获取Token:%s" %self.token)
                 self.refresh_token=json_response["refresh_token"]
+                self.logger.debug("获取Refresh Token：%s" %self.refresh_token)
         self.expire=self.decode_token()[self.token.split(".")[1]]["exp"]
         headers={
             "Referer":"https://%s.univs.cn/clientLogin?redirect=/client/detail/%s" %(self.prefix,self.activity_id),
@@ -1713,24 +1716,21 @@ class UI(QMainWindow):
         for key in new_conf.keys():
             self.logger.debug("正在比较键值 %s" %key)
             if key in conf:
-                self.logger.debug("无需更新键值 %s 的数据" %key)
+                self.logger.debug("键值 %s 的数据已存在" %key)
+                if type(new_conf[key])==dict and type(conf[key])==dict:
+                    self.logger.debug("正在进行递归调用检查深层配置文件")
+                    need_update=self.update_conf(conf=conf[key],new_conf=new_conf[key],write=False)
             else:
                 need_update=True
                 self.logger.debug("正在将 %s 的默认值应用到旧版数据上" %key)
-                if type(new_conf[key])!=dict or key not in conf.keys():
-                    conf[key]=new_conf[key]
-                else:
-                    self.update_conf(conf=conf[key],new_conf=new_conf[key],write=False)
-        if need_update==True:
-            self.logger.debug("更新后的配置：%s" %conf)
-        else:
-            self.logger.debug("无需更新配置文件")
+                conf[key]=new_conf[key]                  
         if write==True and need_update==True:
             self.logger.info("旧版配置已备份为 config.json.bak")
             shutil.copy("config.json","config.json.bak")
             self.logger.debug("正在更新配置文件")
             with open(file="config.json",mode="w",encoding="utf-8") as writer:
                 writer.write(json.dumps(conf,ensure_ascii=False,sort_keys=True,indent=4))
+        return need_update
     def gen_conf(self):
         with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
             conf_writer.write(json.dumps(self.default_conf,indent=4,sort_keys=True,ensure_ascii=False))
