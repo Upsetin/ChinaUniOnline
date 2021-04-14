@@ -11,6 +11,7 @@ import logging
 import requests
 import platform
 import numpy
+import hashlib
 from matplotlib import pyplot as plt 
 from matplotlib import use as matplotuse
 from urllib import parse
@@ -265,13 +266,20 @@ class TestProcessor():
         self.prefix=prefix
         self.query=query
         self.session=requests.sessions.session()
+        # i呀我去提供的生成机制
+        cookie = "_ga=GA1.2." + str(random.randrange(50000000,59999999)) + "." + str(int(time.time())-random.randrange(30000,120000)) + "; _gid=GA1.2." + str(random.randrange(500000000,599999999)) + "." + str(int(time.time())-random.randrange(30000,120000)) + "; tgw_l7_route=" + hashlib.md5(str(random.randrange(10000,99999)).encode('utf8')).hexdigest() + "; _gat=1"
+        self.logger.debug("生成的Cookie：%s" %cookie)
         default_headers={
-            "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36 Edg/88.0.705.74",
+            "User-Agent":"Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2777 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/toolsmp WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64",
             "Referer":"https://ssxx.univs.cn/",
             "Accept":"application/json, text/plain, */*",
             "Accept-Encoding": "gzip, deflate, br",
             "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Origin":"https://ssxx.univs.cn"
+            "Origin":"https://ssxx.univs.cn",
+            "X-Requested-With":"com.tencent.mm",
+            "Sec-Fetch-Site":"same-origin",
+            "Sec-Fetch-Mode":"cors",
+            "cookie":cookie
             }
         self.session.headers.update(default_headers)
         proxy=self.conf["proxy"]
@@ -304,10 +312,10 @@ class TestProcessor():
         self.logger.debug("已加载的模块列表：%s" %[mod.name for mod in self.modules])
         self.client="5f582dd3683c2e0ae3aaacee"
         self.login()
-        params={"t":str(int(time.time())),"id":self.activity_id}
+        params={"t":int(time.time()),"id":self.activity_id}
         json_response=self.session.get("https://%s.univs.cn/cgi-bin/portal/activity/" %self.prefix,params=params).json()
         self.activity_id=json_response["data"]["id"]
-        params={"t":str(int(time.time())),"activity_id":self.activity_id}
+        params={"t":int(time.time()),"activity_id":self.activity_id}
         json_response=self.session.get("https://%s.univs.cn/cgi-bin/portal/race/mode/" %self.prefix,params=params).json()
         self.logger.debug("获取的模式数据：%s" %json_response)
         modes=json_response["data"]["modes"]
@@ -367,7 +375,7 @@ class TestProcessor():
                         _id=json_response["data"]["data"]["_id"] # 5fc8400785e70a5d71bd2c44
                         username=json_response["data"]["data"]["username"] # zhanghua
                         self.token=json_response["data"]["data"]["token"]
-                        params={"t":str(int(time.time())),"uid":_id}
+                        params={"t":int(time.time()),"uid":_id}
                         json_response=self.session.get("https://%s.univs.cn/cgi-bin/authorize/token/" %self.prefix,params=params).json()
                         self.token=json_response["token"]
                         self.refresh_token=json_response["refresh_token"]
@@ -432,10 +440,13 @@ class TestProcessor():
                     raise RuntimeError("未设置登陆所需UID或者Token")
             else:
                 self.logger.info("使用存储的UID完成登陆")
-                params={"t":str(int(time.time())),"uid":self.uid}
+                params={"t":int(time.time()),"uid":self.uid}
                 json_response=self.session.get("https://%s.univs.cn/cgi-bin/authorize/token/" %self.prefix,params=params).json()
+                self.logger.debug("服务器回复：%s" %json_response)
                 self.token=json_response["token"]
+                self.logger.debug("获取Token:%s" %self.token)
                 self.refresh_token=json_response["refresh_token"]
+                self.logger.debug("获取Refresh Token：%s" %self.refresh_token)
         self.expire=self.decode_token()[self.token.split(".")[1]]["exp"]
         headers={
             "Referer":"https://%s.univs.cn/clientLogin?redirect=/client/detail/%s" %(self.prefix,self.activity_id),
@@ -446,7 +457,7 @@ class TestProcessor():
             self.session.headers.update(referer)
         if self.expire-time.time()<500:
             self.update_token()
-        params={"t":str(int(time.time()))}
+        params={"t":int(time.time())}
         json_response=self.session.get("https://%s.univs.cn/cgi-bin/portal/user/" %self.prefix,params=params).json()
         if json_response["code"]==1002:
             self.logger.error("Token已过期")
@@ -574,10 +585,12 @@ class TestProcessor():
             self.logger.debug("已更新Token数据供下次使用")
     @retry(wait=wait_fixed(2)+wait_random(0,3),retry=retry_if_exception_type(requests.exceptions.ConnectionError),stop=stop_after_attempt(5),reraise=True)
     def process(self,mode_id:str,sleep:bool=True):
-        headers={"Referer":"https://%s.univs.cn/client/exam/%s/1/1/%s" %(self.prefix,self.activity_id,mode_id),}
+        self.logger.debug("当前prefix：%s"%self.prefix)
+        headers={"Referer":"https://%s.univs.cn/client/exam/%s/1/1/%s" %(self.prefix,self.activity_id,mode_id)}
         self.session.headers.update(headers)
-        params={"t":str(int(time.time())),"activity_id":self.activity_id,"mode_id":mode_id,"way":self.conf["way"]}
-        json_response=self.session.get("https://%s.univs.cn/cgi-bin/race/beginning/" %self.prefix,params=params).json()
+        params={"t":int(time.time()),"activity_id":self.activity_id,"mode_id":mode_id,"way":self.conf["way"]}
+        self.logger.debug("获取题目信息的URL参数：%s" %params)
+        json_response=self.session.get("https://%s.univs.cn/cgi-bin/race/beginning/" %self.prefix,params=params,data={}).json()
         self.logger.debug("获取题目数据：%s" %json_response)
         if json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
@@ -667,7 +680,7 @@ class TestProcessor():
     def get_option(self,activity_id,question_id,mode_id,n:str,veryfy:bool=False):
         if self.prefix not in ["ssxx"]:
             veryfy=False
-        params={"t":str(int(time.time())),"activity_id":activity_id,"question_id":question_id,"mode_id":mode_id,"way":self.conf["way"]}
+        params={"t":int(time.time()),"activity_id":activity_id,"question_id":question_id,"mode_id":mode_id,"way":self.conf["way"]}
         json_response=self.session.get("https://%s.univs.cn/cgi-bin/race/question/" %self.prefix,params=params).json()
         if json_response["code"]==1005:
             self.logger.error("用户在其他地方登陆，当前客户端被迫下线")
@@ -1713,24 +1726,21 @@ class UI(QMainWindow):
         for key in new_conf.keys():
             self.logger.debug("正在比较键值 %s" %key)
             if key in conf:
-                self.logger.debug("无需更新键值 %s 的数据" %key)
+                self.logger.debug("键值 %s 的数据已存在" %key)
+                if type(new_conf[key])==dict and type(conf[key])==dict:
+                    self.logger.debug("正在进行递归调用检查深层配置文件")
+                    need_update=self.update_conf(conf=conf[key],new_conf=new_conf[key],write=False)
             else:
                 need_update=True
                 self.logger.debug("正在将 %s 的默认值应用到旧版数据上" %key)
-                if type(new_conf[key])!=dict or key not in conf.keys():
-                    conf[key]=new_conf[key]
-                else:
-                    self.update_conf(conf=conf[key],new_conf=new_conf[key],write=False)
-        if need_update==True:
-            self.logger.debug("更新后的配置：%s" %conf)
-        else:
-            self.logger.debug("无需更新配置文件")
+                conf[key]=new_conf[key]                  
         if write==True and need_update==True:
             self.logger.info("旧版配置已备份为 config.json.bak")
             shutil.copy("config.json","config.json.bak")
             self.logger.debug("正在更新配置文件")
             with open(file="config.json",mode="w",encoding="utf-8") as writer:
                 writer.write(json.dumps(conf,ensure_ascii=False,sort_keys=True,indent=4))
+        return need_update
     def gen_conf(self):
         with open(file="config.json",mode="w",encoding="utf-8") as conf_writer:
             conf_writer.write(json.dumps(self.default_conf,indent=4,sort_keys=True,ensure_ascii=False))
