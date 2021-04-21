@@ -9,13 +9,14 @@ GitHub项目地址:
     2021-03-18
 '''
 
-import requests,csv,re,json,random,time
+import requests,csv,re,json,random,time, hashlib
+cookie = "_ga=GA1.2." + str(random.randrange(50000000,59999999)) + "." + str(int(time.time())-random.randrange(30000,120000)) + "; _gid=GA1.2." + str(random.randrange(500000000,599999999)) + "." + str(int(time.time())-random.randrange(30000,120000)) + "; tgw_l7_route=" + hashlib.md5(str(random.randrange(10000,99999)).encode('utf8')).hexdigest() + "; _gat=1"
 
 #获取个人信息
 def GetInfo():
     import requests
 
-    url = "https://ssxx.univs.cn/cgi-bin/race/grade/?t=1612856369&activity_id=5f71e934bcdbf3a8c3ba5061"
+    url = "https://ssxx.univs.cn/cgi-bin/race/grade/?t="+str(int(time.time()))+"&activity_id=5f71e934bcdbf3a8c3ba5061"
 
     payload = {}
     headers = {
@@ -24,13 +25,13 @@ def GetInfo():
         'accept': 'application/json, text/plain, */*',
         'authorization': 'Bearer %s' % (token),
         'sec-ch-ua-mobile': '?0',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2777 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/toolsmp WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
         'sec-fetch-site': 'same-origin',
         'sec-fetch-mode': 'cors',
         'sec-fetch-dest': 'empty',
         'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
         'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
-        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a; _gat=1'
+        'cookie': cookie
     }
 
     response = requests.request("GET", url, headers=headers, data=payload)
@@ -83,7 +84,7 @@ def IntoFile(FileNmae = '题库.csv',Data=[]):
 #获取题目
 def GetQuestions(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a8c3ba51d5'):
 
-    url = "https://ssxx.univs.cn/cgi-bin/race/beginning/?t=1612247769&activity_id=%s&mode_id=%s&way=1"%(activity_id,mode_id)
+    url = "https://ssxx.univs.cn/cgi-bin/race/beginning/?t="+str(int(time.time()))+"&activity_id=%s&mode_id=%s&way=1"%(activity_id,mode_id)
 
     payload = {}
     headers = {
@@ -92,13 +93,13 @@ def GetQuestions(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a
         'accept': 'application/json, text/plain, */*',
         'authorization': 'Bearer %s'%(token),
         'sec-ch-ua-mobile': '?0',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2777 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/toolsmp WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
         'sec-fetch-site': 'same-origin',
         'sec-fetch-mode': 'cors',
         'sec-fetch-dest': 'empty',
         'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
         'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
-        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a; _gat=1'
+        'cookie': cookie
     }
 
     response = requests.request("GET", url, headers=headers, data=payload)
@@ -128,7 +129,7 @@ def GetQuestions(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a
 #获取选项
 def GetOption(activity_id='5f71e934bcdbf3a8c3ba5061',question_id='5f17ef305d6fe02504ba5e17',mode_id='5f71e934bcdbf3a8c3ba51d5'):
 
-    url = "https://ssxx.univs.cn/cgi-bin/race/question/?t=1612247250&activity_id=%s&question_id=%s&mode_id=%s&way=1"%(activity_id,question_id,mode_id)
+    url = "https://ssxx.univs.cn/cgi-bin/race/question/?t="+str(int(time.time()))+"&activity_id=%s&question_id=%s&mode_id=%s&way=1"%(activity_id,question_id,mode_id)
 
     payload = {}
     headers = {
@@ -137,13 +138,13 @@ def GetOption(activity_id='5f71e934bcdbf3a8c3ba5061',question_id='5f17ef305d6fe0
         'accept': 'application/json, text/plain, */*',
         'authorization': 'Bearer %s'%(token),
         'sec-ch-ua-mobile': '?0',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2777 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/toolsmp WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
         'sec-fetch-site': 'same-origin',
         'sec-fetch-mode': 'cors',
         'sec-fetch-dest': 'empty',
         'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
         'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
-        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a'
+        'cookie': cookie
     }
 
     response = requests.request("GET", url, headers=headers, data=payload)
@@ -222,7 +223,7 @@ def SreachResult(question_id='5f17ef305d6fe02504ba5e17',answer='5f75fe348e6c9f85
         'accept': 'application/json, text/plain, */*',
         'authorization': 'Bearer %s'%(token),
         'sec-ch-ua-mobile': '?0',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2777 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/toolsmp WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
         'content-type': 'application/json;charset=UTF-8',
         'origin': 'https://ssxx.univs.cn',
         'sec-fetch-site': 'same-origin',
@@ -230,7 +231,7 @@ def SreachResult(question_id='5f17ef305d6fe02504ba5e17',answer='5f75fe348e6c9f85
         'sec-fetch-dest': 'empty',
         'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
         'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
-        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a'
+        'cookie': cookie
     }
 
     response = requests.request("POST", url, headers=headers, data=payload)
@@ -254,7 +255,7 @@ def Confire(question_id='5f17ef305d6fe02504ba5e17',answer=['5f75fe348e6c9f85d1b6
         'accept': 'application/json, text/plain, */*',
         'authorization': 'Bearer %s'%(token),
         'sec-ch-ua-mobile': '?0',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2777 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/toolsmp WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
         'content-type': 'application/json;charset=UTF-8',
         'origin': 'https://ssxx.univs.cn',
         'sec-fetch-site': 'same-origin',
@@ -262,10 +263,10 @@ def Confire(question_id='5f17ef305d6fe02504ba5e17',answer=['5f75fe348e6c9f85d1b6
         'sec-fetch-dest': 'empty',
         'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
         'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
-        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a'
+        'cookie': cookie
     }
 
-    time.sleep(random.uniform(0.1,0.3))
+    time.sleep(random.uniform(0.5,1.5))
     response = requests.request("POST", url, headers=headers, data=payload)
 
     data = response.json()
@@ -286,7 +287,7 @@ def Finsh(race_code='6018f697224c6a1526204144'):
         'accept': 'application/json, text/plain, */*',
         'authorization': 'Bearer %s'%(token),
         'sec-ch-ua-mobile': '?0',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2777 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/toolsmp WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
         'content-type': 'application/json;charset=UTF-8',
         'origin': 'https://ssxx.univs.cn',
         'sec-fetch-site': 'same-origin',
@@ -294,7 +295,7 @@ def Finsh(race_code='6018f697224c6a1526204144'):
         'sec-fetch-dest': 'empty',
         'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
         'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
-        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a'
+        'cookie': cookie
     }
 
     response = requests.request("POST", url, headers=headers, data=payload)
@@ -314,7 +315,7 @@ def Finsh(race_code='6018f697224c6a1526204144'):
 def PK10(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a8c3ba51da'):
     import requests
 
-    url = "https://ssxx.univs.cn/cgi-bin/race/beginning/?t=1612260314&activity_id=%s&mode_id=%s&way=1"%(activity_id,mode_id)
+    url = "https://ssxx.univs.cn/cgi-bin/race/beginning/?t="+str(int(time.time()))+"&activity_id=%s&mode_id=%s&way=1"%(activity_id,mode_id)
 
     payload = {}
     headers = {
@@ -323,13 +324,13 @@ def PK10(activity_id='5f71e934bcdbf3a8c3ba5061',mode_id='5f71e934bcdbf3a8c3ba51d
         'accept': 'application/json, text/plain, */*',
         'authorization': 'Bearer %s'%(token),
         'sec-ch-ua-mobile': '?0',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2777 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/toolsmp WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
         'sec-fetch-site': 'same-origin',
         'sec-fetch-mode': 'cors',
         'sec-fetch-dest': 'empty',
         'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/3/1/5f71e934bcdbf3a8c3ba51da',
         'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
-        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=09fcb686b72bcf8a19fb9f044a5a52d5; _gat=1'
+        'cookie': cookie
     }
 
     response = requests.request("GET", url, headers=headers, data=payload)
@@ -377,7 +378,7 @@ def Login():
 
 #获取token
 def GetToken(uid=''):
-    url = 'https://ssxx.univs.cn/cgi-bin/authorize/token/?t=1612276118&uid=%s'%(uid)
+    url = 'https://ssxx.univs.cn/cgi-bin/authorize/token/?t='+str(int(time.time()))+'&uid=%s'%(uid)
     a = requests.get(url=url)
     global token
     token = a.json()['token']
@@ -393,13 +394,13 @@ def CheckVerification():
         'accept': 'application/json, text/plain, */*',
         'authorization': 'Bearer %s' % (token),
         'sec-ch-ua-mobile': '?0',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2777 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/toolsmp WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
         'sec-fetch-site': 'same-origin',
         'sec-fetch-mode': 'cors',
         'sec-fetch-dest': 'empty',
         'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
         'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
-        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a; _gat=1'
+        'cookie': cookie
     }
     code = "E5ZKeoD8xezW4TVEn20JVHPFVJkBIfPg+zvMGW+kx1s29cUNFfNka1+1Fr7lUWsyUQhjiZXHDcUhbOYJLK4rS5MflFUvwSwd1B+1kul06t1z9x0mfxQZYggbnrJe3PKEk4etwG/rm3s3FFJd/EbFSdanfslt41aULzJzSIJ/HWI="
     submit_data = {
@@ -423,13 +424,13 @@ def SubmitVerification():
         'accept': 'application/json, text/plain, */*',
         'authorization': 'Bearer %s' % (token),
         'sec-ch-ua-mobile': '?0',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; BKL-AL20 Build/HUAWEIBKL-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.62 XWEB/2777 MMWEBSDK/201201 Mobile Safari/537.36 MMWEBID/1494 MicroMessenger/8.0.1.1841(0x28000151) Process/toolsmp WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
         'sec-fetch-site': 'same-origin',
         'sec-fetch-mode': 'cors',
         'sec-fetch-dest': 'empty',
         'referer': 'https://ssxx.univs.cn/client/exam/5f71e934bcdbf3a8c3ba5061/1/1/5f71e934bcdbf3a8c3ba51d5',
         'accept-language': 'zh,en;q=0.9,zh-CN;q=0.8',
-        'cookie': '_ga=GA1.2.79005828.1612243540; _gid=GA1.2.1602430105.1612243540; tgw_l7_route=be2f17e6fbcb3e6c5202ac57e388ad5a; _gat=1'
+        'cookie': cookie
     }
     code = "HD1bhUGI4d/FhRfIX4m972tZ0g3jRHIwH23ajyre9m1Jxyw4CQ1bMKeIG5T/voFOsKLmnazWkPe6yBbr+juVcMkPwqyafu4JCDePPsVEbVSjLt8OsiMgjloG1fPKANShQCHAX6BwpK33pEe8jSx55l3Ruz/HfcSjDLEHCATdKs4="
     submit_data = {
