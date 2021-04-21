@@ -23,3 +23,4 @@ if __name__=="__main__":
     db.commit()
     db.close()
     print("转换完成，脚本文件夹下的 answers.db 即为GUI版本所需题库")
+    
