@@ -1223,6 +1223,7 @@ class UI(QMainWindow):
     update_signal=pyqtSignal(str)
     show_qr_signal=pyqtSignal(bytes)
     finish_signal=pyqtSignal()
+    finish_bootstrap_signal=pyqtSignal()
     close_qr_signal=pyqtSignal()
     user_info_signal=pyqtSignal(dict)
     update_info_signal=pyqtSignal(dict)
@@ -1464,7 +1465,7 @@ class UI(QMainWindow):
         self.bootstrap_.setToolTip("通过答题生成题目数据库")
         self.bootstrap_.setFixedSize(60,30)
         self.bootstrap_.setStyleSheet(self.theme.bootstrap)
-        self.bootstrap_.clicked.connect(self.bootstrap)
+        self.bootstrap_.clicked.connect(self.bootstrap_callback)
         self.bootstrap_.setEnabled(not os.path.exists("answers.db"))
         config_layout=QVBoxLayout()
         config_layout.setSpacing(0)
@@ -1478,6 +1479,7 @@ class UI(QMainWindow):
         self.contron_max.clicked.connect(self.max_callback)
         self.start_button.clicked.connect(self.start_callback)
         self.finish_signal.connect(self.finish_callback)
+        self.finish_bootstrap_signal.connect(self.finish_bootstrap)
         self.close_qr_signal.connect(self.close_qr)
         self.control.addWidget(self.control_min)
         self.control.addWidget(self.contron_max)
@@ -1574,7 +1576,7 @@ class UI(QMainWindow):
             else:
                 self.setVisible(False)
                 self.tray.setVisible(True)
-    def bootstrap(self):
+    def bootstrap_callback(self):
         if QSqlDatabase.contains("ANSWER_SEARCH"):
             self.db=QSqlDatabase.database("ANSWER_SEARCH")
         else:
@@ -1591,21 +1593,20 @@ class UI(QMainWindow):
         self.logger.debug("已启动数据库连接")
         self.query=QSqlQuery(db=self.db)
         self.query.exec("CREATE TABLE 'ALL_ANSWERS' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)")
-        bootstrap_thread=QThread()
-        bootstrap=BootStrap(query=self.query,show_qr_signal=self.show_qr_signal,finish_signal=self.finish_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
-        bootstrap.close_dock_signal.connect(self.close_dock)
-        bootstrap.update_tray.connect(self.update_status)
-        bootstrap.moveToThread(bootstrap_thread)
-        bootstrap_thread.started.connect(bootstrap.start)
-        bootstrap_thread.finished.connect(self.finish_bootstrap)
+        self.bootstrap_thread=QThread()
+        self.bootstrap=BootStrap(query=self.query,show_qr_signal=self.show_qr_signal,finish_signal=self.finish_bootstrap_signal,close_qr_signal=self.close_qr_signal,tray=self.tray,user_info_signal=self.user_info_signal,update_info_signal=self.update_info_signal)
+        self.bootstrap.close_dock_signal.connect(self.close_dock)
+        self.bootstrap.update_tray.connect(self.update_status)
+        self.bootstrap.moveToThread(self.bootstrap_thread)
+        self.bootstrap_thread.started.connect(self.bootstrap.start)
         self.logger.debug("准备执行数据库初始化")
         self.bootstrap_.setEnabled(False)
         self.bootstrap_.setText("执行中...")
         self.start_button.setEnabled(False)
-        bootstrap_thread.start()
-        bootstrap_thread.quit()
-        bootstrap_thread.wait()
+        self.bootstrap_thread.start()
     def finish_bootstrap(self):
+        self.bootstrap_thread.quit()
+        self.bootstrap_thread.wait()
         self.logger.debug("初始化数据库完成")
         self.query.finish()
         self.query.clear()
@@ -1655,6 +1656,8 @@ class UI(QMainWindow):
             self.logger.debug("全部旧数据表：%s" %tables)
             self.query.exec("CREATE TABLE 'ALL_ANSWERS' (QUESTION TEXT NOT NULL UNIQUE,ANSWER TEXT NOT NULL)")
             for table in tables:
+                if table=="ALL_ANSWERS":
+                    continue
                 self.logger.debug("正在插入 %s 的旧数据到新表中" %table)
                 self.query.exec("INSERT OR IGNORE INTO 'ALL_ANSWERS' SELECT * FROM '%s'" %table)
                 self.logger.debug("正在删除旧数据表")
