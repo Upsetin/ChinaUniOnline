@@ -156,7 +156,7 @@ class UserAvatar(QWidget):
         layout_=QVBoxLayout()
         self.setLayout(layout_)
         self.avatar_label=EnhancedLabel(parent=self)
-        self.avatar_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.avatar_label.setToolTip("正确率分布的雷达图，单击可放大")
         self.avatar_label.clicked.connect(self.resize_avatar)
         if avatar!=None:
@@ -167,17 +167,17 @@ class UserAvatar(QWidget):
         info=QVBoxLayout()
         info.setSpacing(0)
         self.name_label=QLabel("姓名：%s" %name)
-        self.name_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.province_label=QLabel("来自：%s" %province_name)
-        self.province_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.province_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.phone_label=QLabel("电话：%s" %phone)
-        self.phone_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.phone_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.score_label=QLabel("分数：%d\n团队得分：%d" %(score,t_score))
-        self.score_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.score_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.school_label=QLabel("学校：%s" %school)
-        self.school_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.school_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.times_label=QLabel("答题次数：%d\n团队答题次数：%d" %(times,t_times))
-        self.times_label.setAlignment(Qt.Alignment.AlignCenter)
+        self.times_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         info.addWidget(self.name_label)
         info.addWidget(self.province_label)
         info.addWidget(self.phone_label)
@@ -199,7 +199,7 @@ class UserAvatar(QWidget):
     def resize_avatar(self):
         large_avatar=EnhancedLabel(parent=self.parent_)
         large_avatar.setPixmap(self.pixmap)
-        large_avatar.setAlignment(Qt.Alignment.AlignCenter)
+        large_avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         large_avatar.move(int((self.parent_.width()-large_avatar.width())/2),int((self.parent_.height()-large_avatar.width())/2))
         large_avatar.clicked.connect(large_avatar.close)
         large_avatar.setToolTip("单击这个放大的图像可以关闭")
@@ -223,7 +223,7 @@ class EnhancedEdit(QLineEdit):
         return super().focusInEvent(a0)
     def mousePressEvent(self, a0: QMouseEvent) -> None:
         super().mousePressEvent(a0)
-        if self.long==True and a0.button()==Qt.MouseButtons.LeftButton:
+        if self.long==True and a0.button()==Qt.MouseButton.LeftButton:
             self.selectAll()
     def show_clear_button(self):
         if self.isClearButtonEnabled()==False:
@@ -1004,8 +1004,8 @@ class SettingWindow(QDialog):
         self.move(int(0.5*(parent.width()-self.width())),int(0.5*(parent.height()-self.height())))
         title=QLabel("设置")
         title.setStyleSheet(theme["title"])
-        title.setAlignment(Qt.Alignment.AlignCenter)
-        layout.addWidget(title,0,1,Qt.Alignment.AlignCenter)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title,0,1,Qt.AlignmentFlag.AlignCenter)
         control_close=QPushButton()
         control_close.setStyleSheet(theme["control_close"])
         control_close.setToolTip("关闭")
@@ -1049,7 +1049,7 @@ class SettingWindow(QDialog):
             theme_choose.addItem(key,theme_dic[key])
         theme_choose.setCurrentIndex(theme_choose.findData(self.conf["theme"]))
         theme_choose.setView(choose_listview)
-        choose_listview.parentWidget().setWindowFlag(Qt.WindowFlags.NoDropShadowWindowHint)
+        choose_listview.parentWidget().setWindowFlag(Qt.WindowType.NoDropShadowWindowHint)
         theme_choose.setStyleSheet(theme["combo_box"])
         theme_layout=QVBoxLayout()
         theme_layout.addWidget(theme_label)
@@ -1084,12 +1084,12 @@ class SettingWindow(QDialog):
         uid_input.setText(self.conf["auth"]["uid"])
         uid_input.setObjectName("uid")
         uid_input.home(False)
-        auth_layout.addWidget(token_label,0,0,Qt.Alignment.AlignRight)
-        auth_layout.addWidget(token_input,0,1,Qt.Alignment.AlignLeft)
-        auth_layout.addWidget(refresh_label,1,0,Qt.Alignment.AlignRight)
-        auth_layout.addWidget(refresh_input,1,1,Qt.Alignment.AlignLeft)
-        auth_layout.addWidget(uid_label,2,0,Qt.Alignment.AlignRight)
-        auth_layout.addWidget(uid_input,2,1,Qt.Alignment.AlignLeft)
+        auth_layout.addWidget(token_label,0,0,Qt.AlignmentFlag.AlignRight)
+        auth_layout.addWidget(token_input,0,1,Qt.AlignmentFlag.AlignLeft)
+        auth_layout.addWidget(refresh_label,1,0,Qt.AlignmentFlag.AlignRight)
+        auth_layout.addWidget(refresh_input,1,1,Qt.AlignmentFlag.AlignLeft)
+        auth_layout.addWidget(uid_label,2,0,Qt.AlignmentFlag.AlignRight)
+        auth_layout.addWidget(uid_input,2,1,Qt.AlignmentFlag.AlignLeft)
         auth.setLayout(auth_layout)
         way=QCheckBox("团队模式")
         way.setChecked(bool(self.conf["way"]-1))
@@ -1425,7 +1425,7 @@ class UI(QMainWindow):
         self.resize(self.theme.size[0],self.theme.size[1])
         self.setWindowOpacity(self.theme.opacity)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setWindowFlag(Qt.WindowFlags.FramelessWindowHint)
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         self.setAutoFillBackground(True)
         self.setWindowIcon(QIcon(self.theme.icon))
         self.setWindowTitle("ChinaUniOnlineGUI")
@@ -1436,7 +1436,7 @@ class UI(QMainWindow):
         central_widget.setLayout(self.main_layout)
         self.title=QLabel(self.windowTitle())
         self.title.setStyleSheet(self.theme.title)
-        self.title.setAlignment(Qt.Alignment.AlignCenter)
+        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.handler.widget.setStyleSheet(self.theme.logger)
         self.control=QVBoxLayout()
         self.control_close=QPushButton()
@@ -1530,7 +1530,7 @@ class UI(QMainWindow):
             self.dock=QDockWidget("当前登陆用户信息：",self)
             self.dock.setWidget(self.avatar)
             self.dock.setStyleSheet(self.theme.dock)
-            self.addDockWidget(Qt.DockWidgetAreas.RightDockWidgetArea,self.dock)
+            self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.dock)
             self.resize(self.width()+self.dock.width(),self.height())
     def draw_pic(self,data:list):
         self.logger.debug("获取图片信息：%s" %data)
@@ -1702,7 +1702,7 @@ class UI(QMainWindow):
     def show_qr(self,qr:bytes):
         title_label=QLabel("请使用微信扫描小程序码完成登陆")
         title_label.setStyleSheet(self.theme.qr_title)
-        title_label.setAlignment(Qt.Alignment.AlignCenter)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_label.setFixedHeight(20)
         qr_label=QLabel()
         pixmap=QPixmap()
@@ -1714,7 +1714,7 @@ class UI(QMainWindow):
         layout_.addWidget(qr_label,9)
         self.qr_dialog=QWidget(self)
         self.qr_dialog.setLayout(layout_)
-        self.main_layout.addWidget(self.qr_dialog,1,1,Qt.Alignment.AlignCenter)
+        self.main_layout.addWidget(self.qr_dialog,1,1,Qt.AlignmentFlag.AlignCenter)
         self.qr_dialog.show()
     def close_qr(self):
         self.qr_dialog.close()    
@@ -1776,7 +1776,7 @@ class UI(QMainWindow):
         super().mousePressEvent(event)
         self.setFocus()
         self.m_flag=True
-        if event.button()==Qt.MouseButtons.LeftButton and self.isMaximized()==False and self.hasFocus()==True:
+        if event.button()==Qt.MouseButton.LeftButton and self.isMaximized()==False and self.hasFocus()==True:
             self.old_pos=event.globalPosition() #获取鼠标相对窗口的位置
             self.logger.debug("已获取鼠标位置")
     def mouseMoveEvent(self, event:QMouseEvent):
