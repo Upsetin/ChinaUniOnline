@@ -441,12 +441,17 @@ class TestProcessor():
                         self.logger.error("Token未设置")
                         raise RuntimeError("未设置登陆所需uc_token或者UID或者Token")
             else:
-                if self.uc_token=="":
+                if self.uc_token!="":
+                    if time.time()>=self.decode_token(self.uc_token)[self.uc_token.split(".")[1]]["exp"]:
+                        self.logger.error("uc_token已过期")
+                        params={"t":int(time.time()),"uid":self.uid}
+                        self.logger.info("使用存储的UID完成登陆")
+                    else:
+                        params={"t":int(time.time()),"uc_token":self.uc_token}
+                        self.logger.info("使用存储的uc_token完成登陆")
+                else:
                     params={"t":int(time.time()),"uid":self.uid}
                     self.logger.info("使用存储的UID完成登陆")
-                else:
-                    params={"t":int(time.time()),"uc_token":self.uc_token}
-                    self.logger.info("使用存储的uc_token完成登陆")
                 json_response=self.session.get("https://%s.univs.cn/cgi-bin/authorize/token/" %self.prefix,params=params).json()
                 self.logger.debug("服务器回复：%s" %json_response)
                 self.token=json_response["token"]
