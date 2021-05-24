@@ -432,15 +432,21 @@ class TestProcessor():
             self.refresh_token=json_response["refresh_token"]
         else:
             self.logger.info("使用存储的登陆信息完成登陆")
-            self.token,self.refresh_token,self.uid=self.get_token()
-            if self.uid=="":
-                self.logger.debug("未设置UID，使用存储的Token")
-                if self.token=="":
-                    self.logger.error("Token未设置")
-                    raise RuntimeError("未设置登陆所需UID或者Token")
+            self.token,self.refresh_token,self.uid,self.uc_token=self.get_token()
+            if self.uc_token=="":
+                self.logger.error("uc_token未设置")
+                if self.uid=="":
+                    self.logger.error("未设置UID")
+                    if self.token=="":
+                        self.logger.error("Token未设置")
+                        raise RuntimeError("未设置登陆所需uc_token或者UID或者Token")
             else:
-                self.logger.info("使用存储的UID完成登陆")
-                params={"t":int(time.time()),"uid":self.uid}
+                if self.uc_token=="":
+                    params={"t":int(time.time()),"uid":self.uid}
+                    self.logger.info("使用存储的UID完成登陆")
+                else:
+                    params={"t":int(time.time()),"uc_token":self.uc_token}
+                    self.logger.info("使用存储的uc_token完成登陆")
                 json_response=self.session.get("https://%s.univs.cn/cgi-bin/authorize/token/" %self.prefix,params=params).json()
                 self.logger.debug("服务器回复：%s" %json_response)
                 self.token=json_response["token"]
@@ -848,8 +854,9 @@ class TestProcessor():
             token=conf["auth"]["token"]
             refresh_token=conf["auth"]["refresh_token"]
             uid=conf["auth"]["uid"]
-        self.logger.debug("Token=%s,refresh_token=%s,uid=%s" %(token,refresh_token,uid))
-        return token,refresh_token,uid
+            uc_token=conf["auth"]["uc_token"]
+        self.logger.debug("Token=%s,refresh_token=%s,uid=%s,uc_token=%s" %(token,refresh_token,uid,uc_token))
+        return token,refresh_token,uid,uc_token
     def update_token(self):
         json_response=self.session.get("https://%s.univs.cn/cgi-bin/authorize/token/refresh/" %self.prefix).json()
         self.logger.debug("返回数据：%s" %json_response)
@@ -1084,12 +1091,22 @@ class SettingWindow(QDialog):
         uid_input.setText(self.conf["auth"]["uid"])
         uid_input.setObjectName("uid")
         uid_input.home(False)
+        uc_token_label=QLabel("uc_token：")
+        uc_token_label.setStyleSheet(theme["label"])
+        uc_token_input=EnhancedEdit(long=True)
+        uc_token_input.setStyleSheet(theme["line_edit"])
+        uc_token_input.setToolTip("服务器API更新后新的认证信息")
+        uc_token_input.setText(self.conf["auth"]["uc_token"])
+        uc_token_input.setObjectName("uc_token")
+        uc_token_input.home(False)
         auth_layout.addWidget(token_label,0,0,Qt.AlignmentFlag.AlignRight)
         auth_layout.addWidget(token_input,0,1,Qt.AlignmentFlag.AlignLeft)
         auth_layout.addWidget(refresh_label,1,0,Qt.AlignmentFlag.AlignRight)
         auth_layout.addWidget(refresh_input,1,1,Qt.AlignmentFlag.AlignLeft)
         auth_layout.addWidget(uid_label,2,0,Qt.AlignmentFlag.AlignRight)
         auth_layout.addWidget(uid_input,2,1,Qt.AlignmentFlag.AlignLeft)
+        auth_layout.addWidget(uc_token_label,3,0,Qt.AlignmentFlag.AlignRight)
+        auth_layout.addWidget(uc_token_input,3,1,Qt.AlignmentFlag.AlignLeft)
         auth.setLayout(auth_layout)
         way=QCheckBox("团队模式")
         way.setChecked(bool(self.conf["way"]-1))
@@ -1363,7 +1380,8 @@ class UI(QMainWindow):
             "auth":{
                 "token":"",
                 "refresh_token":"",
-                "uid":""
+                "uid":"",
+                "uc_token":""
             },
             "hero":{
                 "title":"英雄篇",
