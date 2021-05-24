@@ -434,25 +434,49 @@ class TestProcessor():
             self.logger.info("使用存储的登陆信息完成登陆")
             self.token,self.refresh_token,self.uid,self.uc_token=self.get_token()
             if self.uc_token=="":
-                self.logger.error("uc_token未设置")
-                if self.uid=="":
-                    self.logger.error("未设置UID")
-                    if self.token=="":
-                        self.logger.error("Token未设置")
+                self.logger.error("未设置uc_token")
+                if self.token=="":
+                    self.logger.error("Token未设置")
+                    if self.uid=="":
+                        self.logger.error("未设置UID")
                         raise RuntimeError("未设置登陆所需uc_token或者UID或者Token")
-            else:
-                if self.uc_token=="":
-                    params={"t":int(time.time()),"uid":self.uid}
-                    self.logger.info("使用存储的UID完成登陆")
+                    else:
+                        login_type="uid"
                 else:
-                    params={"t":int(time.time()),"uc_token":self.uc_token}
-                    self.logger.info("使用存储的uc_token完成登陆")
+                    login_type="token"
+            else:
+                if time.time()>=self.decode_token(self.uc_token)[self.uc_token.split(".")[1]]["exp"]:
+                    self.logger.error("uc_token已过期")
+                    login_type="token"
+                else:
+                    login_type="uc_token"
+            if self.prefix=="dsjd":
+                login_type="uid"
+            if login_type=="uid":
+                params={"t":int(time.time()),"uid":self.uid}
+                self.logger.info("使用存储的UID完成登陆")
+                do_r=True
+            elif login_type=="uc_token":
+                params={"t":int(time.time()),"uc_token":self.uc_token}
+                self.logger.info("使用存储的uc_token完成登陆")
+                do_r=True
+            elif login_type=="token":
+                params={}
+                do_r=False
+            else:
+                self.logger.warning("未找到正确的登陆信息")
+                params={}
+                do_r=False
+            if do_r==True:
                 json_response=self.session.get("https://%s.univs.cn/cgi-bin/authorize/token/" %self.prefix,params=params).json()
                 self.logger.debug("服务器回复：%s" %json_response)
-                self.token=json_response["token"]
-                self.logger.debug("获取Token:%s" %self.token)
-                self.refresh_token=json_response["refresh_token"]
-                self.logger.debug("获取Refresh Token：%s" %self.refresh_token)
+                if json_response["code"]==0:
+                    self.token=json_response["token"]
+                    self.logger.debug("获取Token:%s" %self.token)
+                    self.refresh_token=json_response["refresh_token"]
+                    self.logger.debug("获取Refresh Token：%s" %self.refresh_token)
+                else:
+                    self.error_handler(json_response)
         self.expire=self.decode_token()[self.token.split(".")[1]]["exp"]
         headers={
             "Referer":"https://%s.univs.cn/clientLogin?redirect=/client/detail/%s" %(self.prefix,self.activity_id),
@@ -585,7 +609,7 @@ class TestProcessor():
             self.logger.debug("已关闭Session")
             with open(file="config.json",mode="r",encoding="utf-8") as reader:
                 conf=json.loads(reader.read())
-            conf["auth"]={"token":self.token,"refresh_token":self.refresh_token,"uid":self.uid}
+            conf["auth"]={"token":self.token,"refresh_token":self.refresh_token,"uid":self.uid,"uc_token":self.uc_token}
             with open(file="config.json",mode="w",encoding="utf-8") as writer:
                 writer.write(json.dumps(conf,sort_keys=True,indent=4,ensure_ascii=False))
             self.logger.debug("已更新Token数据供下次使用")
