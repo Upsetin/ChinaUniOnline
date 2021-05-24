@@ -1204,7 +1204,7 @@ class SettingWindow(QDialog):
         x=0
         y=0
         for key in conf.keys():
-            if type(conf[key])!=dict or key=="auth" or key=="advanced":
+            if type(conf[key])!=dict or key=="auth" or key=="advanced" or key=="font_prop":
                 continue
             conf_title=conf[key]["title"]
             conf_enabled=conf[key]["enabled"]
@@ -1768,6 +1768,7 @@ class UI(QMainWindow):
         setting.show()
     def update_conf(self,conf:dict,new_conf:dict=None,write:bool=True):
         need_update=False
+        skip=["auth"]
         if new_conf==None:
             new_conf=self.default_conf
         for key in new_conf.keys():
@@ -1778,9 +1779,10 @@ class UI(QMainWindow):
                     self.logger.debug("正在进行递归调用检查深层配置文件")
                     need_update=self.update_conf(conf=conf[key],new_conf=new_conf[key],write=False)
                 else:
-                    self.logger.debug("已存在的项目类型与默认配置不符，将使用默认配置替换")
-                    need_update=True
-                    conf[key]=new_conf[key]
+                    if key not in skip:
+                        self.logger.debug("已存在的项目类型与默认配置不符，将使用默认配置替换")
+                        need_update=True
+                        conf[key]=new_conf[key]
             else:
                 need_update=True
                 self.logger.debug("正在将 %s 的默认值应用到旧版数据上" %key)
