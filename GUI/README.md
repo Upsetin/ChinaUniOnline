@@ -16,7 +16,7 @@
 3. 打开HttpCanary,设置目标程序为平行空间和平行空间的64位运行环境，没有使用64位微信的可以不用设置目标程序为64位运行环境，开启抓包
 4. 启动平行空间内的微信，在微信上正常登陆小程序并进入小程序的用户页面
 5. 回到抓包程序，这时应该有相当多的连接请求记录
-6. 在记录里面从上往下寻找一条目标地址为 <https://ssxx.univs.cn/cgi-bin/authorize/token/> 的GET请求记录，带有URL参数 t,uid,avatar,activity_id ,查看响应预览
+6. 在记录里面从上往下寻找一条目标地址为 <https://ssxx.univs.cn/cgi-bin/authorize/token/> 的GET请求记录，带有URL参数 t,~~uid~~,avatar,activity_id ,查看响应预览 20210524：uid已被更改为uc_token
 7. 预览应该为一个JSON文档，其中token和refresh_token为所需数据，填入程序设置界面对应位置即可。后面将想办法实现这一过程的自动化
 
 ## UID获取方法
@@ -24,6 +24,11 @@
 方法1：在上面第 6 步的请求参数中uid参数的值就是所需的UID。有UID的情况下优先使用UID获取Token完成登陆  
 方法2：找到 <https://ssxx.univs.cn/cgi-bin/portal/user/> 的GET记录，带有参数t，响应预览的data下的id的值也是UID  
 上面的方法选择一个即可  
+
+## uc_token获取方法
+
+20210524：
+在上面第 6 步的请求参数中uid已经被替换为uc_token。目前其有效期未知，建议每次使用前获取一次最新的值
 
 ## 注意
 
