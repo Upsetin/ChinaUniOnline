@@ -450,6 +450,8 @@ class TestProcessor():
                     login_type="token"
                 else:
                     login_type="uc_token"
+            if self.prefix=="dsjd":
+                login_type="uid"
             if login_type=="uid":
                 params={"t":int(time.time()),"uid":self.uid}
                 self.logger.info("使用存储的UID完成登陆")
@@ -468,10 +470,13 @@ class TestProcessor():
             if do_r==True:
                 json_response=self.session.get("https://%s.univs.cn/cgi-bin/authorize/token/" %self.prefix,params=params).json()
                 self.logger.debug("服务器回复：%s" %json_response)
-                self.token=json_response["token"]
-                self.logger.debug("获取Token:%s" %self.token)
-                self.refresh_token=json_response["refresh_token"]
-                self.logger.debug("获取Refresh Token：%s" %self.refresh_token)
+                if json_response["code"]==0:
+                    self.token=json_response["token"]
+                    self.logger.debug("获取Token:%s" %self.token)
+                    self.refresh_token=json_response["refresh_token"]
+                    self.logger.debug("获取Refresh Token：%s" %self.refresh_token)
+                else:
+                    self.error_handler(json_response)
         self.expire=self.decode_token()[self.token.split(".")[1]]["exp"]
         headers={
             "Referer":"https://%s.univs.cn/clientLogin?redirect=/client/detail/%s" %(self.prefix,self.activity_id),
