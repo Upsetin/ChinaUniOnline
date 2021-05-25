@@ -445,10 +445,13 @@ class TestProcessor():
                 else:
                     login_type="token"
             else:
-                if time.time()>=self.decode_token(self.uc_token)[self.uc_token.split(".")[1]]["exp"]:
+                uc_token_info=self.decode_token(self.uc_token)
+                uc_token_detail=uc_token_info[self.uc_token.split(".")[1]]
+                if time.time()>=uc_token_detail["exp"]:
                     self.logger.error("uc_token已过期")
                     login_type="token"
                 else:
+                    self.uid=uc_token_detail["data"]["id"]
                     login_type="uc_token"
             if self.prefix=="dsjd":
                 login_type="uid"
@@ -1204,7 +1207,7 @@ class SettingWindow(QDialog):
         x=0
         y=0
         for key in conf.keys():
-            if type(conf[key])!=dict or key=="auth" or key=="advanced":
+            if type(conf[key])!=dict or key=="auth" or key=="advanced" or key=="font_prop":
                 continue
             conf_title=conf[key]["title"]
             conf_enabled=conf[key]["enabled"]
@@ -1389,7 +1392,9 @@ class UI(QMainWindow):
             "way":1,
             "hide":False,
             "show_user_info":True,
-            "font_prop":"SimSun",
+            "font_prop":{
+                "family":"SimSun"
+                },
             "randomrize":True,
             "advanced":{
                 "sleep_off":{
@@ -1766,6 +1771,7 @@ class UI(QMainWindow):
         setting.show()
     def update_conf(self,conf:dict,new_conf:dict=None,write:bool=True):
         need_update=False
+        skip=["auth"]
         if new_conf==None:
             new_conf=self.default_conf
         for key in new_conf.keys():
