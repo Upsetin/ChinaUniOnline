@@ -449,6 +449,7 @@ class TestProcessor():
                     self.logger.error("uc_token已过期")
                     login_type="token"
                 else:
+                    self.uid=self.decode_token(self.uc_token)[self.uc_token.split(".")[1]]["id"]
                     login_type="uc_token"
             if self.prefix=="dsjd":
                 login_type="uid"
