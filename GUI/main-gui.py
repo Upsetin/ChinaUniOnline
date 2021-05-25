@@ -445,11 +445,13 @@ class TestProcessor():
                 else:
                     login_type="token"
             else:
-                if time.time()>=self.decode_token(self.uc_token)[self.uc_token.split(".")[1]]["exp"]:
+                uc_token_info=self.decode_token(self.uc_token)
+                uc_token_detail=uc_token_info[self.uc_token.split(".")[1]]
+                if time.time()>=uc_token_detail["exp"]:
                     self.logger.error("uc_token已过期")
                     login_type="token"
                 else:
-                    self.uid=self.decode_token(self.uc_token)[self.uc_token.split(".")[1]]["id"]
+                    self.uid=uc_token_detail["data"]["id"]
                     login_type="uc_token"
             if self.prefix=="dsjd":
                 login_type="uid"
