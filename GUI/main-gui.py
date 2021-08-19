@@ -311,7 +311,7 @@ class TestProcessor():
             break
         self.logger.debug("已加载的模块列表：%s" %[mod.name for mod in self.modules])
         self.client="5f582dd3683c2e0ae3aaacee"
-        self.login()
+        self.login(type_="v0")
         params={"t":int(time.time()),"id":self.activity_id}
         json_response=self.session.get("https://%s.univs.cn/cgi-bin/portal/activity/" %self.prefix,params=params).json()
         self.activity_id=json_response["data"]["id"]
