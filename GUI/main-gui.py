@@ -850,6 +850,7 @@ class TestProcessor():
             self.check_verify(mode_id=mode_id,n=n)
             self.submit_verify(mode_id=mode_id,n=n)
             #self.finish(activity_id=activity_id,mode_id=mode_id,race_code=race_code)
+            self.logger.warning("在结束过程中出现验证")
         elif json_response["code"]==0:
             owner=json_response["data"]["owner"]
             self.logger.info("执行完成，正确数：%d，答题用时：%d 秒" %(owner["correct_amount"],owner["consume_time"]))
